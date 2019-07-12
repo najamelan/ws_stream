@@ -248,31 +248,6 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 
 
 
-	// -------AsyncRead01 impl
-	//
-	// fn async_pread( &mut self, buf: &mut [u8] ) -> AsyncIoResult
-	// {
-	// 	trace!( "WsStream: poll_read called" );
-
-	// 	match self.io_read( buf )
-	// 	{
-	// 		Ok ( amount ) => Ok ( Async::Ready( amount ) ),
-
-	// 		Err( ref error ) if error.kind() == WouldBlock =>
-	// 		{
-	// 			trace!( "WsStream: read would block" );
-
-	// 			Ok ( Async::NotReady )
-	// 		},
-
-	// 		// Order is important here, don't move this above the other error match
-	// 		// TODO: explain what's going on here
-	// 		//
-	// 		Err( e ) => Err( e ),
-	// 	}
-	// }
-
-
 	// -------AsyncWrite01 impl
 	//
 	fn async_shutdown( &mut self ) -> AsyncTokioResult
@@ -338,17 +313,8 @@ impl<S: AsyncRead01 + AsyncWrite01> io::Write for Pin< &mut WsStream<S> >
 }
 
 
-impl<S: AsyncRead01 + AsyncWrite01> AsyncRead01  for WsStream<S>
-{
-	// fn poll_read( &mut self, buf: &mut [u8] ) -> AsyncIoResult
-	// {
-	// 	self.async_pread( buf )
-	// }
-}
-
-
-impl<S: AsyncRead01 + AsyncWrite01> AsyncRead01  for Pin< &mut WsStream<S> >
-{}
+impl<S: AsyncRead01 + AsyncWrite01> AsyncRead01  for WsStream<S>             {}
+impl<S: AsyncRead01 + AsyncWrite01> AsyncRead01  for Pin< &mut WsStream<S> > {}
 
 
 impl<S: AsyncRead01 + AsyncWrite01> AsyncWrite01 for WsStream<S>
@@ -384,20 +350,9 @@ impl<S: AsyncRead01 + AsyncWrite01> AsyncWrite for WsStream<S>
 {
 	// TODO: on WouldBlock, we should wake up the task when it becomes ready.
 	//
-	fn poll_write( mut self: Pin<&mut Self>, _cx: &mut Context, buf: &[u8] ) -> Poll<Result<usize, io::Error>>
+	fn poll_write( self: Pin<&mut Self>, cx: &mut Context, buf: &[u8] ) -> Poll<Result<usize, io::Error>>
 	{
-		match self.io_write( buf )
-		{
-			Ok (len                            ) => { Poll::Ready(Ok ( len )) }
-			Err( e                             ) =>
-			{
-				match e.kind()
-				{
-					io::ErrorKind::WouldBlock => Poll::Pending,
-					_                         => { error!( "{}", &e ); Poll::Ready( Err(e) ) }
-				}
-			}
-		}
+		Pin::new( &mut AsyncWrite01CompatExt::compat( self ) ).poll_write( cx, buf )
 	}
 
 

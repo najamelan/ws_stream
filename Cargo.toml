@@ -41,9 +41,9 @@ homepage = "https://github.com/najamelan/wasm_websocket_stream"
 keywords = ["websocket", "tokio", "stream", "async"]
 license = "Unlicense"
 name = "ws_stream"
-readme = "README.md"
+readme = "README_DEV.md"
 repository = "https://github.com/najamelan/wasm_websocket_stream"
-version = "0.1.0"
+version = "0.0.0"
 
 [profile]
 [profile.release]
