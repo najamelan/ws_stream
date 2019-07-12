@@ -1,0 +1,50 @@
+# Auto-generated from "Cargo.yml"
+[dependencies]
+failure = "^0.1"
+log = "^0.4"
+pin-utils = "^0.1.0-alpha.4"
+tokio-tungstenite = "^0.8"
+tungstenite = "^0.8"
+url = "^1"
+
+[dependencies.futures-preview]
+features = ["io-compat", "compat"]
+version = "0.3.0-alpha.17"
+
+[dependencies.futures_01]
+package = "futures"
+version = "^0.1"
+
+[dependencies.tokio]
+default-features = false
+features = ["codec", "tcp"]
+version = "^0.1"
+
+[dev-dependencies]
+flexi_logger = "^0.11"
+pretty_assertions = "^0.6"
+
+[dev-dependencies.async_runtime]
+package = "naja_async_runtime"
+version = "^0.1.7"
+
+[dev-dependencies.futures_codec]
+path = "../../futures-codec"
+
+[package]
+authors = ["Naja Melan <najamelan@autistici.org>"]
+categories = []
+description = "Provide AsyncRead/AsyncWrite over WebSockets (both tokio and 0.3)"
+documentation = "https://docs.rs/ws_stream_nowasm"
+edition = "2018"
+homepage = "https://github.com/najamelan/wasm_websocket_stream"
+keywords = ["websocket", "tokio", "stream", "async"]
+license = "Unlicense"
+name = "ws_stream"
+readme = "README.md"
+repository = "https://github.com/najamelan/wasm_websocket_stream"
+version = "0.1.0"
+
+[profile]
+[profile.release]
+debug = true
