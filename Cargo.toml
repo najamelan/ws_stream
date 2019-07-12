@@ -30,6 +30,7 @@ version = "^0.1.7"
 
 [dev-dependencies.futures_codec]
 path = "../../futures-codec"
+version = "^0.2.3"
 
 [package]
 authors = ["Naja Melan <najamelan@autistici.org>"]
