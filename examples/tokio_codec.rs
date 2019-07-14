@@ -1,7 +1,7 @@
 #![ feature( async_await ) ]
 
-
-#[ cfg(not( target_arch = "wasm32" )) ]
+// We create a server and a client who connect over a websocket and frame that connection with
+// a tokio codec.
 //
 fn main()
 {
@@ -11,7 +11,6 @@ fn main()
 		async_runtime :: { rt, RtConfig      } ,
 		futures       :: { StreamExt, SinkExt } ,
 		futures       :: { compat::{ Stream01CompatExt, Sink01CompatExt } } ,
-		futures_01    :: { stream::Stream as _ } ,
 		tokio         :: { codec::{ LinesCodec, Decoder } } ,
 		log           :: { * } ,
 	};
@@ -27,13 +26,10 @@ fn main()
 		let mut connections = WsStream::listen( "127.0.0.1:3112" ).take(1);
 		let     server      = connections.next().await.expect( "1 connection" ).expect( "1 connection" ).await.expect( "WS handshake" );
 
-		let codec = LinesCodec::new();
+		let mut sink = LinesCodec::new().framed( server ).sink_compat();
 
-		let (sink, stream) = codec.framed( server ).split();
-		let mut sink       = sink.sink_compat();
-		let _stream        = stream.compat();
-
-		sink.send( "A line".to_string() ).await.expect( "Send a line" );
+		sink.send( "A line"       .to_string() ).await.expect( "Send a line"        );
+		sink.send( "A second line".to_string() ).await.expect( "Send a second line" );
 	};
 
 	let client = async move
@@ -42,17 +38,13 @@ fn main()
 
 		let client = WsStream::connect( "127.0.0.1:3112" ).await.expect( "connect to websocket" );
 
-		let codec = LinesCodec::new();
+		let mut stream = LinesCodec::new().framed( client ).compat();
 
-		let (sink, stream) = codec.framed( client ).split();
-		let _sink          = sink.sink_compat();
-		let mut stream     = stream.compat();
+		let res = stream.next().await.expect( "Receive Some" ).expect( "Receive a line" );
+		assert_eq!( "A line", dbg!( &res ) );
 
-		let res = stream.next().await.expect( "Receive a line" ).expect( "Receive a line" );
-
-		dbg!( &res );
-
-		assert_eq!( "A line".to_string(), res );
+		let res = stream.next().await.expect( "Receive Some" ).expect( "Receive a line" );
+		assert_eq!( "A second line", dbg!( &res ) );
 	};
 
 	rt::spawn( server ).expect( "spawn task" );
@@ -60,6 +52,3 @@ fn main()
 	rt::run();
 }
 
-
-#[ cfg( target_arch = "wasm32" ) ]
-fn main(){}
