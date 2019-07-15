@@ -125,36 +125,32 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 
 		loop
 		{
-			// we need to be able to dereference the state to access the Vec<u8>
-			//
-			let state = self.state.clone();
-
-
-			match state
+			match &mut self.state
 			{
-				ReadState::Ready { chunk, mut chunk_start } =>
+				ReadState::Ready { chunk, chunk_start } =>
 				{
 					trace!( "io_read: received message" );
 
-					let chunk: Vec<u8> = ( chunk ).into();
-					let len = cmp::min( buf.len(), chunk.len() - chunk_start );
+					let end = cmp::min( *chunk_start + buf.len(), chunk.len() );
+					let len = end - *chunk_start;
 
-					buf[..len].copy_from_slice( &chunk[chunk_start..chunk_start + len] );
+					buf[..len].copy_from_slice( &chunk[*chunk_start..end] );
 
-					chunk_start += len;
 
-					if chunk.len() == chunk_start
+					if chunk.len() == end
 					{
 						self.state = ReadState::PendingChunk;
 					}
 
 					else
 					{
-						self.state = ReadState::Ready{ chunk: Message::Binary( chunk ), chunk_start }
+						*chunk_start = end;
 					}
+
 
 					return Ok( len );
 				}
+
 
 				ReadState::PendingChunk =>
 				{
@@ -166,7 +162,7 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 						//
 						Ok( Async::Ready( Some( chunk ) ) ) =>
 						{
-							self.state = ReadState::Ready { chunk, chunk_start: 0 };
+							self.state = ReadState::Ready { chunk: chunk.into(), chunk_start: 0 };
 							continue;
 						}
 
