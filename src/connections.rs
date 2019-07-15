@@ -36,7 +36,7 @@ impl Connections
 
 impl Stream for Connections
 {
-	type Item = Result< Compat01As03<Accept<TcpStream>>, WsErr >;
+	type Item = Result< Compat01As03<Accept>, WsErr >;
 
 
 	fn poll_next( self: Pin<&mut Self>, cx: &mut Context ) -> Poll< Option<Self::Item> >

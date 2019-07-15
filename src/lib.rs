@@ -34,7 +34,7 @@ mod import
 		futures      :: { prelude::{ Stream, AsyncRead, AsyncWrite },           } ,
 		tokio        :: { io::{ AsyncRead as AsyncRead01, AsyncWrite as AsyncWrite01 }, prelude::{ Async }           } ,
 		std          :: { cmp::{ self }, io::{ self, ErrorKind::WouldBlock }  } ,
-		std          :: { pin::Pin, fmt } ,
+		std          :: { pin::Pin, fmt, net::SocketAddr } ,
 		log          :: { info, trace, error                                                 } ,
 		tungstenite       :: { Message, handshake::{ server::NoCallback } } ,
 		tokio             :: { net::{ tcp::Incoming, TcpListener, TcpStream }   } ,

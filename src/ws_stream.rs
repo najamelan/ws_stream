@@ -38,6 +38,7 @@ pub struct WsStream<S: AsyncRead01 + AsyncWrite01>
 	stream : SplitStream < WebSocketStream<S> >,
 	sink   : SplitSink   < WebSocketStream<S> >,
 	state  : ReadState                         ,
+	peer   : Option< SocketAddr >              ,
 }
 
 
@@ -80,7 +81,7 @@ impl WsStream<TcpStream>
 			{
 				match ok(()).and_then( |_| { client_async( Url::parse( &url ).expect( "parse url" ), tcpstream ) } ).compat().await
 				{
-					Ok (ws) => Ok( Self::new( ws.0 ) ),
+					Ok (ws) => Ok( Self::new( ws.0, Some( addr ) ) ),
 					Err(e ) =>
 					{
 						error!( "{}", &e );
@@ -92,6 +93,14 @@ impl WsStream<TcpStream>
 			Err(_) => Err( WsErrKind::TcpConnection.into() ),
 		}
 	}
+
+
+	/// If the WsStream was created with a peer_addr set, you can retrieve it here.
+	//
+	pub fn peer_addr( &self ) -> Option<SocketAddr>
+	{
+		self.peer
+	}
 }
 
 
@@ -100,11 +109,11 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 {
 	/// Create a WsStream
 	//
-	pub fn new( ws: WebSocketStream<S> ) -> Self
+	pub fn new( ws: WebSocketStream<S>, peer: Option<SocketAddr> ) -> Self
 	{
 		let (sink, stream) = ws.split();
 
-		Self{ stream, sink, state: ReadState::PendingChunk }
+		Self{ stream, sink, state: ReadState::PendingChunk, peer }
 	}
 
 
