@@ -15,7 +15,7 @@ fn main()
 		log           :: { * } ,
 	};
 
-	flexi_logger::Logger::with_str( "events=trace, framed=trace, wasm_websocket_stream=trace, tokio=warn" ).start().unwrap();
+	// flexi_logger::Logger::with_str( "events=trace, framed=trace, wasm_websocket_stream=trace, tokio=warn" ).start().unwrap();
 
 	rt::init( RtConfig::Local ).expect( "init rt" );
 
