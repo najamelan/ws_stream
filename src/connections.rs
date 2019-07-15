@@ -4,7 +4,7 @@ use
 };
 
 
-/// A stream of connections.
+/// A stream of incoming connections.
 //
 pub struct Connections
 {

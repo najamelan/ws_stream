@@ -4,7 +4,7 @@ use
 };
 
 
-/// Future representing a finished WS handshake.Accept
+/// Future representing a finished WS handshake.
 //
 pub struct Accept
 {
@@ -15,7 +15,7 @@ pub struct Accept
 
 impl Accept
 {
-	/// Create a new accept handshake from an AsyncRead01/Write
+	/// Create a new accept handshake from an AsyncRead01/Write01
 	//
 	pub fn new( stream: TcpStream ) -> Self
 	{

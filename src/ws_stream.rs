@@ -1,37 +1,28 @@
-use
-{
-	crate :: { import::*, WsErr, WsErrKind, Connections } ,
-	futures_01::stream::Stream as _,
-	futures_01::sink  ::Sink   as _,
-};
+use crate::{ import::*, WsErr, WsErrKind, Connections };
 
 
-// type AsyncIoResult    = Result< Async<usize>, io::Error        >;
-type AsyncTokioResult = Result< Async<()>   , tokio::io::Error >;
+type AsyncTokioResult = Result< Async<()>, tokio::io::Error >;
 
 
 #[derive(Debug, Clone)]
 //
 enum ReadState
 {
-	Ready { chunk: Message, chunk_start: usize },
-	PendingChunk,
-	Eof,
+	Ready { chunk: Vec<u8>, chunk_start: usize } ,
+	PendingChunk                                 ,
+	Eof                                          ,
 }
 
 
-/// A tokio AsyncRead01/AsyncWrite01 representing a WebSocket connection. It only supports binary mode. Contrary to the rest of this library,
-/// this will work on types from [futures 0.1](https://docs.rs/futures/0.1.25/futures/) instead of [0.3](https://rust-lang-nursery.github.io/futures-api-docs/0.3.0-alpha.13/futures/index.html). This is because tokio currently is on futures 0.1, so the stream returned from
-/// a codec will be 0.1.
+/// Represents a duplex stream of bytes on top of a websocket connection. This type implements AsyncRead/Write
+/// from both tokio and futures 0.3.
 ///
-/// Currently !Sync and !Send.
+/// Convenience methods are provided for TCP as underlying stream, but it can work over any tokio-tungstenite
+/// websocket, so on top of any tokio AsyncRead/AsyncWrite.
 ///
-/// ## Example
+/// Both server (listen) and client (connect) are available, even though this library is mainly intended
+/// to be the server end of wasm modules that need to communicate over an AsyncRead.
 ///
-/// This example if from the integration tests. Uses [tokio-serde-cbor](https://docs.rs/tokio-serde-cbor/0.3.1/tokio_serde_cbor/) to send arbitrary data that implements [serde::Serialize](https://docs.rs/serde/1.0.89/serde/trait.Serialize.html) over a websocket.
-///
-/// ```
-/// ```
 //
 pub struct WsStream<S: AsyncRead01 + AsyncWrite01>
 {
@@ -52,7 +43,6 @@ impl WsStream<TcpStream>
 		let addr = url.as_ref().parse().unwrap();
 
 		// Create the event loop and TCP listener we'll accept connections on.
-		// TODO, work on any AsyncRead01/AsyncWrite01 rather than only TCP.
 		//
 		let socket = TcpListener::bind( &addr ).unwrap();
 		info!( "Listening on: {}", addr );
@@ -68,10 +58,9 @@ impl WsStream<TcpStream>
 		let addr = url.as_ref().parse().expect( "parse socketaddress" );
 
 		// Create the event loop and TCP listener we'll accept connections on.
-		// TODO, work on any AsyncRead01/AsyncWrite01 rather than only TCP.
 		//
 		let socket = TcpStream::connect( &addr ).compat().await;
-		info!( "Connecting to: {}", addr );
+		info!( "WsStream: connecting to: {}", addr );
 
 		let url = "ws://".to_string() + url.as_ref() + "/";
 
@@ -79,6 +68,9 @@ impl WsStream<TcpStream>
 		{
 			Ok(tcpstream) =>
 			{
+				// We need the ok and then because client_async does io outside of the future it returns.
+				// See: https://github.com/snapview/tokio-tungstenite/issues/55
+				//
 				match ok(()).and_then( |_| { client_async( Url::parse( &url ).expect( "parse url" ), tcpstream ) } ).compat().await
 				{
 					Ok (ws) => Ok( Self::new( ws.0, Some( addr ) ) ),
@@ -90,7 +82,7 @@ impl WsStream<TcpStream>
 				}
 			}
 
-			Err(_) => Err( WsErrKind::TcpConnection.into() ),
+			Err(e) => Err( e.context( WsErrKind::TcpConnection ).into() ),
 		}
 	}
 
@@ -207,9 +199,6 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 
 
 
-
-
-
 	// -------io:Write impl
 	//
 	fn io_write( &mut self, buf: &[u8] ) -> io::Result< usize >
@@ -239,6 +228,7 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 	}
 
 
+
 	fn io_flush( &mut self ) -> io::Result<()>
 	{
 		trace!( "flush AsyncWrite" );
@@ -252,7 +242,7 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 			{
 				match e
 				{
-					// The connection is closed normally, probably by the remote
+					// The connection is closed normally, probably by the remote.
 					//
 					tungstenite::Error::ConnectionClosed =>
 					{
@@ -260,6 +250,8 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 						return Err( io::Error::from( io::ErrorKind::ConnectionAborted ) );
 					}
 
+					// Trying to work with an already closed connection.
+					//
 					tungstenite::Error::AlreadyClosed =>
 					{
 						error!( "{}", e );
@@ -292,6 +284,7 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 		Ok(().into())
 	}
 }
+
 
 
 impl<S: AsyncRead01 + AsyncWrite01> Drop for WsStream<S>

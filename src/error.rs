@@ -1,37 +1,9 @@
 use crate::{ import::* };
 
 
-/// The error type for errors happening in `async_runtime`.
+/// The error type for errors happening in `ws_stream`.
 ///
-/// Use [`WsErr::kind()`] to know which kind of error happened. [WsErrKind] implements [Eq],
-/// so you can do the following if all you want to know is the kind of error:
-///
-/// ```ignore
-/// use async_runtime::*;
-///
-/// rt::init( RtConfig::Local ).expect( "Set default executor" );
-///
-/// match rt::init( RtConfig::Pool )
-/// {
-///    Err(e) =>
-///    {
-///       if let WsErrKind::DoubleExecutorInit = e.kind()
-///       {
-///          println!( "{}", e );
-///       }
-///
-///       // This also works:
-///       //
-///       match e.kind()
-///       {
-///          WsErrKind::DoubleExecutorInit => println!( "{}", e ),
-///          _ => {},
-///       }
-///    },
-///
-///    Ok(_) => {}
-/// }
-/// ```
+/// Use [`WsErr::kind()`] to know which kind of error happened.
 //
 #[ derive( Debug ) ]
 //
@@ -42,7 +14,7 @@ pub struct WsErr
 
 
 
-/// The different kind of errors that can happen when you use the `async_runtime` API.
+/// The different kind of errors that can happen when you use the `ws_stream` API.
 //
 #[ derive( Clone, PartialEq, Eq, Debug, Fail ) ]
 //
@@ -54,17 +26,11 @@ pub enum WsErrKind
 	//
 	WsHandshake,
 
-	/// This is an error from tokio-tungstenite.
+	/// An error happend on the tcp level when connecting.
 	//
 	#[ fail( display = "A tcp connection error happened" ) ]
 	//
 	TcpConnection,
-
-	/// Invalid input to `WsReadyState::try_from( u16 )`
-	///
-	#[ fail( display = "Invalid input to conversion to WsReadyState: {}", _0 ) ]
-	//
-	InvalidReadyState( u16 ),
 }
 
 
@@ -118,12 +84,5 @@ impl From< FailContext<WsErrKind> > for WsErr
 		WsErr { inner }
 	}
 }
-
-
-// TODO: this no longer compiles. It compiles fine in thespis, but not in this crate even though this
-// file is largely copy/paste. The problem is that there is a blanket impl for Fail in failure for every
-// E: std::error::Error + 'static + Send + Sync
-//
-// impl std::error::Error for WsErr {}
 
 
