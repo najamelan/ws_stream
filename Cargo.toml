@@ -9,7 +9,7 @@ url = "^1"
 
 [dependencies.futures-preview]
 features = ["io-compat", "compat"]
-version = "0.3.0-alpha.17"
+path = "../../futures-rs/futures"
 
 [dependencies.futures_01]
 package = "futures"
