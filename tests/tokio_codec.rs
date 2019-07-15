@@ -9,12 +9,12 @@
 
 use
 {
-	ws_stream     :: { *                 } ,
-	async_runtime :: { rt, RtConfig      } ,
-	futures       :: { StreamExt, SinkExt, channel::oneshot } ,
+	ws_stream     :: { *                                              } ,
+	async_runtime :: { rt, RtConfig                                   } ,
+	futures       :: { StreamExt, SinkExt, channel::oneshot           } ,
 	futures       :: { compat::{ Stream01CompatExt, Sink01CompatExt } } ,
-	futures_01    :: { stream::Stream as _ } ,
-	tokio         :: { codec::{ LinesCodec, Decoder } } ,
+	futures_01    :: { stream::Stream as _                            } ,
+	tokio         :: { codec::{ LinesCodec, Decoder }                 } ,
 	// log           :: { * } ,
 };
 
@@ -26,6 +26,7 @@ fn frame()
 	// flexi_logger::Logger::with_str( "events=trace, wasm_websocket_stream=trace, tokio=warn" ).start().expect( "flexi_logger");
 
 	rt::init( RtConfig::Local ).expect( "rt::init" );
+
 
 	let server = async
 	{
@@ -40,6 +41,7 @@ fn frame()
 		sink.send( "A line"       .to_string() ).await.expect( "Send a line" );
 		sink.send( "A second line".to_string() ).await.expect( "Send a line" );
 	};
+
 
 	let client = async
 	{
@@ -58,6 +60,7 @@ fn frame()
 
 		assert_eq!( "A second line".to_string(), res );
 	};
+
 
 	rt::spawn( server ).expect( "spawn task" );
 	rt::spawn( client ).expect( "spawn task" );
@@ -79,6 +82,7 @@ fn would_block()
 	rt::init( RtConfig::Local ).expect( "rt::init" );
 
 	let (tx, rx) = oneshot::channel();
+
 
 	let server = async move
 	{
@@ -118,6 +122,7 @@ fn would_block()
 
 		assert_eq!( "A second line".to_string(), line );
 	};
+
 
 	rt::spawn( server ).expect( "spawn task" );
 	rt::spawn( client ).expect( "spawn task" );
