@@ -249,9 +249,34 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 
 		match self.sink.poll_complete()
 		{
-			Ok ( Async::Ready(_) ) => { return Ok ( ()                                      ) }
-			Ok ( Async::NotReady ) => { trace!( "io_flush: would block" ); return Err( io::Error::from( WouldBlock           ) ) }
-			Err(e)                 => { error!( "{}", e ); return Err( io::Error::from( io::ErrorKind::Other ) ) }
+			Ok ( Async::Ready(_) ) => { return Ok ( () )                                                               }
+			Ok ( Async::NotReady ) => { trace!( "io_flush: would block" ); return Err( io::Error::from( WouldBlock ) ) }
+
+			Err(e) =>
+			{
+				match e
+				{
+					// The connection is closed normally, probably by the remote
+					//
+					tungstenite::Error::ConnectionClosed =>
+					{
+						error!( "{}", e );
+						return Err( io::Error::from( io::ErrorKind::ConnectionAborted ) );
+					}
+
+					tungstenite::Error::AlreadyClosed =>
+					{
+						error!( "{}", e );
+						return Err( io::Error::from( io::ErrorKind::ConnectionAborted ) );
+					}
+
+					_ =>
+					{
+						error!( "{}", e );
+						return Err( io::Error::from( io::ErrorKind::Other ) )
+					}
+				}
+			}
 		}
 	}
 
