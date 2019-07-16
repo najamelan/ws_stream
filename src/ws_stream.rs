@@ -205,25 +205,40 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 	{
 		trace!( "WsStream: io_write called" );
 
-		let len = buf.len();
-
 		// FIXME: avoid extra copy?
 		//
-		match self.sink.start_send( Message::binary( buf ) )
+		match self.sink.start_send( buf.into() )
 		{
-			Ok( AsyncSink::Ready ) =>
-			{
-				match self.io_flush()
-				{
-					Ok ( () ) => return Ok (len),
-					Err( e  ) => { error!( "{}", e ); return Err( e ) },
-
-				}
-			}
-
+			Ok( AsyncSink::Ready       ) => { return Ok( buf.len() ); }
 			Ok( AsyncSink::NotReady(_) ) => { trace!( "io_write: would block" ); return Err( io::Error::from( WouldBlock ) ) }
 
-			Err(e) => { error!( "{}", e ); return Err( io::Error::from( io::ErrorKind::Other ) ) }
+			Err(e) =>
+			{
+				match e
+				{
+					// The connection is closed normally, probably by the remote.
+					//
+					tungstenite::Error::ConnectionClosed =>
+					{
+						error!( "{}", e );
+						return Err( io::Error::from( io::ErrorKind::NotConnected ) );
+					}
+
+					// Trying to work with an already closed connection.
+					//
+					tungstenite::Error::AlreadyClosed =>
+					{
+						error!( "{}", e );
+						return Err( io::Error::from( io::ErrorKind::ConnectionAborted ) );
+					}
+
+					_ =>
+					{
+						error!( "{}", e );
+						return Err( io::Error::from( io::ErrorKind::Other ) )
+					}
+				}
+			}
 		}
 	}
 
@@ -247,7 +262,7 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 					tungstenite::Error::ConnectionClosed =>
 					{
 						error!( "{}", e );
-						return Err( io::Error::from( io::ErrorKind::ConnectionAborted ) );
+						return Err( io::Error::from( io::ErrorKind::NotConnected ) );
 					}
 
 					// Trying to work with an already closed connection.

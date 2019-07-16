@@ -45,7 +45,8 @@ fn main()
 					// This can happen in the flush, but it's because the client has already disconnected
 					// FIXME: probably our wasm code doesn't properly close the websocket
 					//
-					tungstenite::error::Error::AlreadyClosed => {}
+					tungstenite::error::Error::ConnectionClosed => {}
+					tungstenite::error::Error::AlreadyClosed    => {}
 
 					// Other errors we want to know about
 					//

@@ -38,7 +38,7 @@ mod import
 		tokio             :: { net::{ tcp::Incoming, TcpListener, TcpStream }                                                  } ,
 		tokio             :: { io::{ AsyncRead as AsyncRead01, AsyncWrite as AsyncWrite01 }, prelude::{ Async }                } ,
 		tokio_tungstenite :: { accept_async, client_async, WebSocketStream, AcceptAsync                                        } ,
-		tungstenite       :: { Message, handshake::{ server::NoCallback }                                                      } ,
+		tungstenite       :: { handshake::{ server::NoCallback }                                                               } ,
 		url               :: { Url                                                                                             } ,
 	};
 }
