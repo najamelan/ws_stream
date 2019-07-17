@@ -9,7 +9,7 @@ url = "^1"
 
 [dependencies.futures-preview]
 features = ["io-compat", "compat"]
-path = "../../futures-rs/futures"
+path = "../futures-rs/futures"
 
 [dependencies.futures_01]
 package = "futures"
@@ -29,7 +29,7 @@ package = "naja_async_runtime"
 version = "^0.1.7"
 
 [dev-dependencies.futures_codec]
-path = "../../futures-codec"
+path = "../futures-codec"
 version = "^0.2.3"
 
 [package]
@@ -38,12 +38,12 @@ categories = []
 description = "Provide AsyncRead/AsyncWrite over WebSockets (both tokio and 0.3)"
 documentation = "https://docs.rs/ws_stream"
 edition = "2018"
-homepage = "https://github.com/najamelan/wasm_websocket_stream"
+homepage = "https://github.com/najamelan/ws_stream"
 keywords = ["websocket", "tokio", "stream", "async"]
 license = "Unlicense"
 name = "ws_stream"
 readme = "README.md"
-repository = "https://github.com/najamelan/wasm_websocket_stream"
+repository = "https://github.com/najamelan/ws_stream"
 version = "0.1.0"
 
 [profile]

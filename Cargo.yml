@@ -6,8 +6,8 @@ package:
   authors       : [ Naja Melan <najamelan@autistici.org> ]
   description   : Provide AsyncRead/AsyncWrite over WebSockets (both tokio and 0.3)
   license       : Unlicense
-  homepage      : https://github.com/najamelan/wasm_websocket_stream
-  repository    : https://github.com/najamelan/wasm_websocket_stream
+  homepage      : https://github.com/najamelan/ws_stream
+  repository    : https://github.com/najamelan/ws_stream
   documentation : https://docs.rs/ws_stream
   readme        : README.md
   keywords      : [ websocket, tokio, stream, async ]
@@ -17,7 +17,7 @@ package:
 dependencies:
 
   failure           : ^0.1
-  futures-preview   : { path: ../../futures-rs/futures, features: [io-compat, compat] }
+  futures-preview   : { path: ../futures-rs/futures, features: [io-compat, compat] }
   # futures-preview   : { version: 0.3.0-alpha.17, features: [io-compat, compat] }
   futures_01        : { version: ^0.1, package: futures }
   log               : ^0.4
@@ -32,7 +32,7 @@ dev-dependencies:
   pretty_assertions: ^0.6
   flexi_logger     : ^0.11
   async_runtime    : { version: ^0.1.7, package: naja_async_runtime }
-  futures_codec    : { version: ^0.2.3, path: ../../futures-codec }
+  futures_codec    : { version: ^0.2.3, path: ../futures-codec }
 
 profile:
   release:
