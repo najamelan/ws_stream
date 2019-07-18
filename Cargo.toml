@@ -9,7 +9,7 @@ url = "^1"
 
 [dependencies.futures-preview]
 features = ["io-compat", "compat"]
-path = "../futures-rs/futures"
+version = "0.3.0-alpha.17"
 
 [dependencies.futures_01]
 package = "futures"
@@ -29,8 +29,7 @@ package = "naja_async_runtime"
 version = "^0.1.7"
 
 [dev-dependencies.futures_codec]
-path = "../futures-codec"
-version = "^0.2.3"
+git = "https://github.com/najamelan/futures-codec"
 
 [package]
 authors = ["Naja Melan <najamelan@autistici.org>"]
