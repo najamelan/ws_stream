@@ -10,7 +10,6 @@ enum ReadState
 {
 	Ready { chunk: Vec<u8>, chunk_start: usize } ,
 	PendingChunk                                 ,
-	Eof                                          ,
 }
 
 
@@ -179,20 +178,18 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 						{
 							error!( "{}", err );
 
-							self.state = ReadState::Eof;
-
 							match err
 							{
 								tungstenite::error::Error::Io(e) => { return Err( e ) }
 
+								// These can be connection closed, amongst others
+								//
 								_ => { return Ok(0) }
 							}
 
 						}
 					}
 				}
-
-				ReadState::Eof => { trace!( "io_read: EOF" ); return Ok(0); }
 			}
 		}
 	}
