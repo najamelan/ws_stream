@@ -12,6 +12,7 @@ use
 	tokio_tungstenite :: { accept_async                                                                 } ,
 	tokio             :: { net::TcpListener                                                             } ,
 	std               :: { env                                                                          } ,
+	log               :: { *                                                                            } ,
 };
 
 
@@ -19,16 +20,47 @@ fn main()
 {
 	let program = async
 	{
+		flexi_logger::Logger::with_str( "echo_tt=trace, tokio=warn" ).start().unwrap();
+
+
 		let addr         = env::args().nth(1).unwrap_or( "127.0.0.1:3212".to_string() ).parse().unwrap();
 		let mut incoming = TcpListener::bind( &addr ).unwrap().incoming().compat();
 
 		println!( "Listening on: {}", addr );
 
 
-		while let Some( conn ) = incoming.next().await.transpose().expect( "tcp connection" )
+		while let Some( conn ) = incoming.next().await
 		{
-			let addr           = conn.peer_addr().expect( "connected streams should have a peer address" );
-			let ws_stream      = ok(conn).and_then( accept_async ).compat().await.expect( "ws handshake" );
+			// If the TCP stream fails, we stop processing this connection
+			//
+			let tcp_stream = match conn
+			{
+				Ok(tcp) => tcp,
+				Err(_) =>
+				{
+					debug!( "Failed TCP incoming connection" );
+					continue;
+				}
+			};
+
+
+			let addr      = tcp_stream.peer_addr().expect( "connected streams should have a peer address" );
+			let handshake = ok(tcp_stream).and_then( accept_async ).compat();
+
+
+			// If the Ws handshake fails, we stop processing this connection
+			//
+			let ws_stream = match handshake.await
+			{
+				Ok(ws) => ws,
+
+				Err(_) =>
+				{
+					debug!( "Failed WebSocket HandShake" );
+					continue;
+				}
+			};
+
 			let (sink, stream) = ws_stream.split();
 			let stream         = stream.compat();
 			let sink           = sink.sink_compat();
