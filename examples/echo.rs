@@ -6,17 +6,18 @@
 
 use
 {
-	ws_stream     :: { *                       } ,
-	async_runtime :: { rt, RtConfig            } ,
+	ws_stream     :: { *                                                       } ,
+	async_runtime :: { rt, RtConfig                                            } ,
 	futures       :: { StreamExt, AsyncReadExt, AsyncBufReadExt, io::BufReader } ,
-	std           :: { io, env                      } ,
+	std           :: { io, env                                                 } ,
+	log           :: { *                                                       } ,
 };
 
 
 
 fn main()
 {
-	// flexi_logger::Logger::with_str( "echo=trace, ws_stream=trace, tokio=warn" ).start().unwrap();
+	flexi_logger::Logger::with_str( "echo=trace, ws_stream=warn, tokio=warn" ).start().unwrap();
 
 	// We only need one thread.
 	//
@@ -35,8 +36,33 @@ fn main()
 		{
 			let conn = async move
 			{
-				let ws_stream = stream.expect( "tcp stream" ).await.expect( "ws handshake" );
-				println!( "Incoming connection from: {}", ws_stream.peer_addr().expect( "peer addr" ) );
+				// If the TCP stream fails, we stop processing this connection
+				//
+				let tcp_stream = match stream
+				{
+					Ok(tcp) => tcp,
+					Err(_) =>
+					{
+						debug!( "Failed TCP incoming connection" );
+						return;
+					}
+				};
+
+				// If the Ws handshake fails, we stop processing this connection
+				//
+				let ws_stream = match tcp_stream.await
+				{
+					Ok(ws) => ws,
+
+					Err(_) =>
+					{
+						debug!( "Failed WebSocket HandShake" );
+						return;
+					}
+				};
+
+
+				info!( "Incoming connection from: {}", ws_stream.peer_addr().expect( "peer addr" ) );
 
 
 				let (reader, mut writer) = ws_stream.split();
