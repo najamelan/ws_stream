@@ -22,14 +22,17 @@ version = "^0.1"
 
 [dev-dependencies]
 flexi_logger = "^0.11"
+futures_codec = "^0.2"
 pretty_assertions = "^0.6"
+rand = "^0.7"
+regex = "^1"
 
 [dev-dependencies.async_runtime]
 package = "naja_async_runtime"
 version = "^0.1.7"
 
-[dev-dependencies.futures_codec]
-git = "https://github.com/najamelan/futures-codec"
+[dev-dependencies.chat_format]
+path = "examples/chat_format"
 
 [package]
 authors = ["Naja Melan <najamelan@autistici.org>"]

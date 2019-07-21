@@ -6,14 +6,16 @@
 
 use
 {
+	chat_format   :: { futures_serde_cbor::Codec, ChatMessage, Command           } ,
+	log           :: { *                                                         } ,
 	ws_stream     :: { *                                                         } ,
 	async_runtime :: { rt, RtConfig                                              } ,
 	std           :: { env, cell::RefCell, collections::HashMap, net::SocketAddr } ,
-	futures_codec :: { LinesCodec, Framed                                        } ,
+	futures_codec :: { Framed                                                    } ,
+	// rand          :: { thread_rng, Rng, distributions::Alphanumeric              } ,
 
 	futures ::
 	{
-		future::ready                                 ,
 		StreamExt                                     ,
 		compat::Compat01As03                          ,
 		channel::mpsc::{ unbounded, UnboundedSender } ,
@@ -22,16 +24,20 @@ use
 };
 
 
-type ConnMap = RefCell< HashMap<SocketAddr, (String, UnboundedSender<String>)> >;
+type ConnMap = RefCell< HashMap<SocketAddr, UnboundedSender<ChatMessage>> >;
+
+static WELCOME : &str   = "Welcome to the ws_stream Chat Server!";
+static SERVERID:  usize = 0;
 
 thread_local!
 {
-	static CONNS: ConnMap = RefCell::new( HashMap::new() );
+	static CONNS : ConnMap        = RefCell::new( HashMap::new() );
+	static CLIENT: RefCell<usize> = RefCell::new( 0 );
 }
 
 fn main()
 {
-	// flexi_logger::Logger::with_str( "echo=trace, ws_stream=trace, tokio=warn" ).start().unwrap();
+	flexi_logger::Logger::with_str( "echo=trace, ws_stream=error, tokio=warn" ).start().unwrap();
 
 	// We only need one thread.
 	//
@@ -60,52 +66,112 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 
 	println!( "Incoming connection from: {}", peer_addr );
 
-	let (tx, rx)        = unbounded();
-	let framed          = Framed::new( ws_stream, LinesCodec {} );
-	let (mut out, msgs) = framed.split();
+	let (tx, rx)            = unbounded();
+	let framed              = Framed::new( ws_stream, Codec::new() );
+	let (mut out, mut msgs) = framed.split();
+	let mut nick            = peer_addr.to_string();
+	let uniq_id: usize      = CLIENT.with( |cnt| { *cnt.borrow_mut() += 1; cnt.borrow().clone() } );
+
 
 	// Welcome message
 	//
-	out.send( "Welcome to the ws_stream chat server!".to_string() ).await.expect( "send welcome" );
+	println!( "sending welcome line" );
 
-	CONNS.with( |conns| conns.borrow_mut().insert( peer_addr, (peer_addr.to_string() + ": ", tx) ) );
+	out.send( server_msg( WELCOME.to_string() ) ).await.expect( "send welcome" );
 
-	let inc = msgs.for_each( move |msg|
+	CONNS.with( |conns| conns.borrow_mut().insert( peer_addr, tx ) );
+
+
+
+
+	let outgoing = async move
+	{
+		// Send out to the client all messages that come in over the channel
+		//
+		match rx.map( |res| Ok( res ) ).forward( out ).await
+		{
+			Err(e) =>
+			{
+				CONNS.with( |conns|
+				{
+					let mut conns = conns.borrow_mut();
+
+					conns.remove( &peer_addr );
+
+				});
+
+				info!( "Lost connection: {}", peer_addr );
+				error!( "{}", e );
+			},
+
+			Ok(_)  => {}
+		};
+	};
+
+
+	rt::spawn_local( outgoing ).expect( "spawn outgoing" );
+
+
+
+
+	// Incoming messages
+	//
+	while let Some( msg ) = msgs.next().await
 	{
 		// TODO: handle io errors
 		//
-		let msg = msg.expect( "message" );
+		let mut msg: ChatMessage = msg.expect( "message" );
 
 		// set the nick
 		//
-		if msg == "set nick"
+		if msg.cmd == Command::SetNick  &&  msg.txt.is_some()
 		{
-			// set the nick
+			let new_nick = msg.txt.unwrap();
+			msg  = server_msg( format!( "{} changed nick => {}\n", &nick, &new_nick ) );
+			nick = new_nick;
 		}
 
-		else
+
+		else if msg.cmd == Command::Message
 		{
-			CONNS.with( |conns|
+			msg.sid  = Some( uniq_id      );
+			msg.nick = Some( nick.clone() );
+		}
+
+
+		println!( "received line from: {}", &nick );
+
+		CONNS.with( |conns|
+		{
+			let conns = conns.borrow();
+
+			for client in conns.values()
 			{
-				let conns = conns.borrow();
+				client.unbounded_send( msg.clone() ).expect( "send on unbounded" );
+			};
+		});
 
-				for (addr, data) in conns.iter()
-				{
-					if addr != &peer_addr
-					{
-						data.1.unbounded_send( data.0.clone() + &msg.clone() ).expect( "send on unbounded" );
-					}
-				};
-			});
-		}
-
-		ready(())
-	});
-
-	rt::spawn_local( inc ).expect( "spawn inc" );
-
-	// Send out to the client all messages that come in over the channel
-	//
-	rx.map( |res| Ok( res ) ).forward( out ).await.expect( "send on out" );
+	};
 }
+
+
+fn server_msg( msg: String ) -> ChatMessage
+{
+	ChatMessage
+	{
+		cmd : Command::ServerMessage       ,
+		txt : Some( msg )                  ,
+		nick: Some( "Server".to_string() ) ,
+		sid : Some( SERVERID )             ,
+	}
+}
+
+
+// fn random_id() -> String
+// {
+// 	thread_rng()
+// 		.sample_iter( &Alphanumeric )
+// 		.take(8)
+// 		.collect()
+// }
 

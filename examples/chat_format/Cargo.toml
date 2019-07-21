@@ -1,0 +1,17 @@
+# Auto-generated from "Cargo.yml"
+[dependencies]
+bytes = "^0.4"
+futures_codec = "^0.2"
+serde_cbor = "^0.10"
+
+[dependencies.serde]
+features = ["derive"]
+version = "^1"
+
+[package]
+authors = ["Naja Melan <najamelan@autistici.org>"]
+description = "An example for using websockets in rust WASM."
+edition = "2018"
+name = "chat_format"
+repository = "https::/github.com/najamelan/ws_stream"
+version = "0.1.0"
