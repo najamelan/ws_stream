@@ -291,7 +291,15 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 		// This can not throw normally, because the only errors the api
 		// can return is if we use a code or a reason string, which we don't.
 		//
-		self.sink.close().expect( "close ws socket" );
+		match self.sink.close()
+		{
+			Err(e) =>
+			{
+				error!( "{}", e );
+			}
+
+			_ => {}
+		}
 
 		Ok(().into())
 	}
@@ -305,10 +313,7 @@ impl<S: AsyncRead01 + AsyncWrite01> Drop for WsStream<S>
 	{
 		trace!( "Drop WsStream" );
 
-		// This can not throw normally, because the only errors the api
-		// can return is if we use a code or a reason string, which we don't.
-		//
-		self.sink.close().expect( "WsStream::drop - close ws socket" );
+		let _ = self.async_shutdown();
 	}
 }
 

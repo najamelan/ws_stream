@@ -10,6 +10,7 @@
 ## Testing
 - more tests
 - enable travis CI
+- enable dependabot
 
 ## Documentation
 - chat client example
