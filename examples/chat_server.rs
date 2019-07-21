@@ -6,12 +6,12 @@
 
 use
 {
-	chat_format   :: { futures_serde_cbor::Codec, ChatMessage, Command           } ,
-	log           :: { *                                                         } ,
-	ws_stream     :: { *                                                         } ,
-	async_runtime :: { rt, RtConfig                                              } ,
-	std           :: { env, cell::RefCell, collections::HashMap, net::SocketAddr } ,
-	futures_codec :: { Framed                                                    } ,
+	chat_format   :: { futures_serde_cbor::Codec, Wire, ClientMsg, ServerMsg } ,
+	log           :: { *                                                            } ,
+	ws_stream     :: { *                                                            } ,
+	async_runtime :: { rt, RtConfig                                                 } ,
+	std           :: { env, cell::RefCell, collections::HashMap, net::SocketAddr    } ,
+	futures_codec :: { Framed                                                       } ,
 	// rand          :: { thread_rng, Rng, distributions::Alphanumeric              } ,
 
 	futures ::
@@ -24,16 +24,17 @@ use
 };
 
 
-type ConnMap = RefCell< HashMap<SocketAddr, UnboundedSender<ChatMessage>> >;
+type ConnMap = RefCell< HashMap<SocketAddr, UnboundedSender<Wire>> >;
+
 
 static WELCOME : &str   = "Welcome to the ws_stream Chat Server!";
-static SERVERID:  usize = 0;
 
 thread_local!
 {
 	static CONNS : ConnMap        = RefCell::new( HashMap::new() );
 	static CLIENT: RefCell<usize> = RefCell::new( 0 );
 }
+
 
 fn main()
 {
@@ -70,14 +71,17 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 	let framed              = Framed::new( ws_stream, Codec::new() );
 	let (mut out, mut msgs) = framed.split();
 	let mut nick            = peer_addr.to_string();
-	let uniq_id: usize      = CLIENT.with( |cnt| { *cnt.borrow_mut() += 1; cnt.borrow().clone() } );
+
+	// A unique sender id for this client
+	//
+	let sid: usize          = CLIENT.with( |cnt| { *cnt.borrow_mut() += 1; cnt.borrow().clone() } );
 
 
 	// Welcome message
 	//
 	println!( "sending welcome line" );
 
-	out.send( server_msg( WELCOME.to_string() ) ).await.expect( "send welcome" );
+	out.send( Wire::Server( ServerMsg::ServerMsg( WELCOME.to_string() ) ) ).await.expect( "send welcome" );
 
 	CONNS.with( |conns| conns.borrow_mut().insert( peer_addr, tx ) );
 
@@ -92,15 +96,9 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 		{
 			Err(e) =>
 			{
-				CONNS.with( |conns|
-				{
-					let mut conns = conns.borrow_mut();
+				CONNS.with( |conns| conns.borrow_mut().remove( &peer_addr ) );
 
-					conns.remove( &peer_addr );
-
-				});
-
-				info!( "Lost connection: {}", peer_addr );
+				info!( "Client disconnected: {}", peer_addr );
 				error!( "{}", e );
 			},
 
@@ -120,51 +118,47 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 	{
 		// TODO: handle io errors
 		//
-		let mut msg: ChatMessage = msg.expect( "message" );
-
-		// set the nick
-		//
-		if msg.cmd == Command::SetNick  &&  msg.txt.is_some()
+		let msg = match msg
 		{
-			let new_nick = msg.txt.unwrap();
-			msg  = server_msg( format!( "{} changed nick => {}\n", &nick, &new_nick ) );
-			nick = new_nick;
-		}
+			Ok( Wire::Client( msg ) ) => msg,
+			_                         => continue,
+		};
 
 
-		else if msg.cmd == Command::Message
+		match msg
 		{
-			msg.sid  = Some( uniq_id      );
-			msg.nick = Some( nick.clone() );
-		}
-
-
-		println!( "received line from: {}", &nick );
-
-		CONNS.with( |conns|
-		{
-			let conns = conns.borrow();
-
-			for client in conns.values()
+			ClientMsg::SetNick( new_nick ) =>
 			{
-				client.unbounded_send( msg.clone() ).expect( "send on unbounded" );
-			};
-		});
+				broadcast( &ServerMsg::ServerMsg( format!( "{} changed nick => {}\n", &nick, &new_nick ) ) );
+				nick = new_nick;
+			}
 
+
+			ClientMsg::ChatMsg( txt ) =>
+			{
+				broadcast( &ServerMsg::ChatMsg { nick: nick.clone(), sid, txt } );
+			}
+		}
 	};
 }
 
 
-fn server_msg( msg: String ) -> ChatMessage
+
+// Send a server message to all connected clients
+//
+fn broadcast( msg: &ServerMsg )
 {
-	ChatMessage
+	CONNS.with( |conns|
 	{
-		cmd : Command::ServerMessage       ,
-		txt : Some( msg )                  ,
-		nick: Some( "Server".to_string() ) ,
-		sid : Some( SERVERID )             ,
-	}
+		let conns = conns.borrow();
+
+		for client in conns.values()
+		{
+			client.unbounded_send( Wire::Server( msg.clone() ) ).expect( "send on unbounded" );
+		};
+	});
 }
+
 
 
 // fn random_id() -> String

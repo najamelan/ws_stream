@@ -7,34 +7,46 @@ use
 };
 
 
-#[ derive( Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize ) ]
+/// Wire format for communication between the server and clients
+/// Currently it's not possible with futures-codec to frame the AsyncRead
+/// with a different type as the AsyncWrite, so we wrap our 2 types in
+/// an enum.
 //
-pub enum Command
+#[ derive( Debug, Clone, PartialEq, Eq, Serialize, Deserialize ) ]
+//
+pub enum Wire
 {
-	Message       ,
-	ServerMessage ,
-	SetNick       ,
-	Disconnect    ,
-	Connect       ,
+	/// Messages coming from a client
+	//
+	Client(ClientMsg),
+
+	/// Messages coming from the server
+	//
+	Server(ServerMsg),
 }
 
 
+/// Wire format for communication between the server and clients
+//
+#[ derive( Debug, Clone, PartialEq, Eq, Serialize, Deserialize ) ]
+//
+pub enum ClientMsg
+{
+	ChatMsg(String),
+	SetNick(String),
+}
+
 
 /// Wire format for communication between the server and clients
-/// Clients only need to set cmd and txt if they just want to send a chat message.
 //
-#[ derive( Debug, Clone, Serialize, Deserialize ) ]
+#[ derive( Debug, Clone, PartialEq, Eq, Serialize, Deserialize ) ]
 //
-pub struct ChatMessage
+pub enum ServerMsg
 {
-	pub cmd : Command        ,
-	pub txt : Option<String> ,
-	pub nick: Option<String> ,
-
-	/// A unique sender id, even if the nick changes, this will be constant for the entire
-	/// websocket connection. This allows clients to give a username a specific color and
-	/// keep it if the nick changes.
-	//
-	pub sid : Option<usize> ,
+	ServerMsg   (String)                                  ,
+	ChatMsg     { nick: String, sid: usize, txt: String } ,
+	UserJoined  { nick: String, sid: usize              } ,
+	UserLeft    { nick: String, sid: usize              } ,
+	NickChanged { old : String, new: String             } ,
 }
 

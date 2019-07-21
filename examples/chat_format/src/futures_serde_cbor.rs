@@ -28,14 +28,9 @@ use bytes::BytesMut;
 use serde::{Deserialize, Serialize};
 use serde_cbor::de::{Deserializer, IoRead};
 use serde_cbor::error::Error as CborError;
-use serde_cbor::ser::Serializer;
+use serde_cbor::ser::{ IoWrite, Serializer };
 // use tokio_io::codec::{Decoder as IoDecoder, Encoder as IoEncoder};
-
-use
-{
-    futures_codec :: { Decoder as IoDecoder, Encoder as IoEncoder } ,
-    serde_cbor    :: { ser::IoWrite                               } ,
-};
+use futures_codec :: { Decoder as IoDecoder, Encoder as IoEncoder };
 
 
 /// Errors returned by encoding and decoding.
