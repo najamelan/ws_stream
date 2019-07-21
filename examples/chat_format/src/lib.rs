@@ -43,10 +43,11 @@ pub enum ClientMsg
 //
 pub enum ServerMsg
 {
-	ServerMsg   (String)                                  ,
-	ChatMsg     { nick: String, sid: usize, txt: String } ,
-	UserJoined  { nick: String, sid: usize              } ,
-	UserLeft    { nick: String, sid: usize              } ,
-	NickChanged { old : String, new: String             } ,
+	ServerMsg   (String)                                    ,
+	ChatMsg     { nick : String, sid: usize, txt: String  } ,
+	UserJoined  { nick : String, sid: usize               } ,
+	UserLeft    { nick : String, sid: usize               } ,
+	NickChanged { old  : String, new: String              } ,
+	Welcome     { users: Vec<(usize,String)>, txt: String } ,
 }
 

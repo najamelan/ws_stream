@@ -24,10 +24,18 @@ use
 };
 
 
-type ConnMap = RefCell< HashMap<SocketAddr, UnboundedSender<Wire>> >;
+type ConnMap = RefCell< HashMap<SocketAddr, Connection> >;
 
 
-static WELCOME : &str   = "Welcome to the ws_stream Chat Server!";
+struct Connection
+{
+	nick     : String                ,
+	sid      : usize                 ,
+	tx       : UnboundedSender<Wire> ,
+}
+
+
+static WELCOME : &str = "Welcome to the ws_stream Chat Server!";
 
 thread_local!
 {
@@ -79,11 +87,26 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 
 	// Welcome message
 	//
-	println!( "sending welcome line" );
+	println!( "sending welcome message" );
 
-	out.send( Wire::Server( ServerMsg::ServerMsg( WELCOME.to_string() ) ) ).await.expect( "send welcome" );
+	let all_users = CONNS.with( |conns|
+	{
+		conns.borrow_mut().insert
+		(
+			peer_addr,
+			Connection { tx, nick: nick.clone(), sid },
+		);
 
-	CONNS.with( |conns| conns.borrow_mut().insert( peer_addr, tx ) );
+		conns.borrow().values().map( |c| (c.sid, c.nick.clone()) ).collect()
+	});
+
+	out.send( Wire::Server( ServerMsg::Welcome
+	{
+		txt  : WELCOME.to_string(),
+		users: all_users,
+
+	})).await.expect( "send welcome" );
+
 
 
 
@@ -152,7 +175,7 @@ fn broadcast( msg: &ServerMsg )
 	{
 		let conns = conns.borrow();
 
-		for client in conns.values()
+		for client in conns.values().map( |c| &c.tx )
 		{
 			client.unbounded_send( Wire::Server( msg.clone() ) ).expect( "send on unbounded" );
 		};
