@@ -6,7 +6,7 @@
 
 use
 {
-	chat_format   :: { futures_serde_cbor::Codec, Wire, ClientMsg, ServerMsg             } ,
+	chat_format   :: { futures_serde_cbor::Codec, ClientMsg, ServerMsg             } ,
 	log           :: { *                                                                 } ,
 	ws_stream     :: { *                                                                 } ,
 	async_runtime :: { rt, RtConfig                                                      } ,
@@ -29,9 +29,9 @@ type ConnMap = RefCell< HashMap<SocketAddr, Connection> >;
 
 struct Connection
 {
-	nick     : Rc<RefCell<String>>   ,
-	sid      : usize                 ,
-	tx       : UnboundedSender<Wire> ,
+	nick     : Rc<RefCell<String>>        ,
+	sid      : usize                      ,
+	tx       : UnboundedSender<ServerMsg> ,
 }
 
 
@@ -108,12 +108,12 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 		conns.borrow().values().map( |c| (c.sid, c.nick.borrow().to_string() )).collect()
 	});
 
-	out.send( Wire::Server( ServerMsg::Welcome
+	out.send( ServerMsg::Welcome
 	{
 		txt  : WELCOME.to_string(),
 		users: all_users,
 
-	})).await.expect( "send welcome" );
+	}).await.expect( "send welcome" );
 
 
 
@@ -161,8 +161,8 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 		//
 		let msg = match msg
 		{
-			Ok( Wire::Client( msg ) ) => msg,
-			_                         => continue,
+			Ok( msg ) => msg,
+			_         => continue,
 		};
 
 
@@ -211,7 +211,7 @@ fn broadcast( msg: &ServerMsg )
 
 		for client in conns.values().map( |c| &c.tx )
 		{
-			client.unbounded_send( Wire::Server( msg.clone() ) ).expect( "send on unbounded" );
+			client.unbounded_send( msg.clone() ).expect( "send on unbounded" );
 		};
 	});
 }

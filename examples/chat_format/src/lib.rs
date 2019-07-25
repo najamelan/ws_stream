@@ -8,25 +8,6 @@ use
 
 
 /// Wire format for communication between the server and clients
-/// Currently it's not possible with futures-codec to frame the AsyncRead
-/// with a different type as the AsyncWrite, so we wrap our 2 types in
-/// an enum.
-//
-#[ derive( Debug, Clone, PartialEq, Eq, Serialize, Deserialize ) ]
-//
-pub enum Wire
-{
-	/// Messages coming from a client
-	//
-	Client(ClientMsg),
-
-	/// Messages coming from the server
-	//
-	Server(ServerMsg),
-}
-
-
-/// Wire format for communication between the server and clients
 //
 #[ derive( Debug, Clone, PartialEq, Eq, Serialize, Deserialize ) ]
 //
