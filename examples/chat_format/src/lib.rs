@@ -19,16 +19,17 @@ pub enum ClientMsg
 
 
 /// Wire format for communication between the server and clients
+/// The time is in secods since epoch UTC
 //
 #[ derive( Debug, Clone, PartialEq, Eq, Serialize, Deserialize ) ]
 //
 pub enum ServerMsg
 {
-	ServerMsg   (String)                                    ,
-	ChatMsg     { nick : String, sid: usize, txt: String  } ,
-	UserJoined  { nick : String, sid: usize               } ,
-	UserLeft    { nick : String, sid: usize               } ,
-	NickChanged { old  : String, sid: usize, new: String  } ,
-	Welcome     { users: Vec<(usize,String)>, txt: String } ,
+	ServerMsg   { time: i64, txt: String                             } ,
+	ChatMsg     { time: i64, nick : String, sid: usize, txt: String  } ,
+	UserJoined  { time: i64, nick : String, sid: usize               } ,
+	UserLeft    { time: i64, nick : String, sid: usize               } ,
+	NickChanged { time: i64, old  : String, sid: usize, new: String  } ,
+	Welcome     { time: i64, users: Vec<(usize,String)>, txt: String } ,
 }
 

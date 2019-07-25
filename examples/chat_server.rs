@@ -6,7 +6,8 @@
 
 use
 {
-	chat_format   :: { futures_serde_cbor::Codec, ClientMsg, ServerMsg             } ,
+	chat_format   :: { futures_serde_cbor::Codec, ClientMsg, ServerMsg                   } ,
+	chrono        :: { Utc                                                               } ,
 	log           :: { *                                                                 } ,
 	ws_stream     :: { *                                                                 } ,
 	async_runtime :: { rt, RtConfig                                                      } ,
@@ -90,7 +91,7 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 
 	// Let all clients know there is a new kid on the block
 	//
-	broadcast( &ServerMsg::UserJoined { nick: nick.borrow().to_string(), sid } );
+	broadcast( &ServerMsg::UserJoined { time: Utc::now().timestamp(), nick: nick.borrow().to_string(), sid } );
 
 
 	// Welcome message
@@ -110,8 +111,9 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 
 	out.send( ServerMsg::Welcome
 	{
-		txt  : WELCOME.to_string(),
-		users: all_users,
+		time : Utc::now().timestamp() ,
+		txt  : WELCOME.to_string()    ,
+		users: all_users              ,
 
 	}).await.expect( "send welcome" );
 
@@ -134,7 +136,7 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 				{
 					// let other clients know this client disconnected
 					//
-					broadcast( &ServerMsg::UserLeft { nick: nick2.borrow().to_string(), sid } );
+					broadcast( &ServerMsg::UserLeft { time: Utc::now().timestamp(), nick: nick2.borrow().to_string(), sid } );
 
 
 					debug!( "Client disconnected: {}", peer_addr );
@@ -165,19 +167,21 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 			_         => continue,
 		};
 
+		let time = Utc::now().timestamp();
+
 
 		match msg
 		{
 			ClientMsg::SetNick( new_nick ) =>
 			{
-				broadcast( &ServerMsg::NickChanged{ old: nick.borrow().to_string(), new: new_nick.clone(), sid } );
+				broadcast( &ServerMsg::NickChanged{ time, old: nick.borrow().to_string(), new: new_nick.clone(), sid } );
 				*nick.borrow_mut() = new_nick;
 			}
 
 
 			ClientMsg::ChatMsg( txt ) =>
 			{
-				broadcast( &ServerMsg::ChatMsg { nick: nick.borrow().to_string(), sid, txt } );
+				broadcast( &ServerMsg::ChatMsg { time, nick: nick.borrow().to_string(), sid, txt } );
 			}
 		}
 	};
@@ -191,7 +195,7 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 	{
 		// let other clients know this client disconnected
 		//
-		broadcast( &ServerMsg::UserLeft { nick: nick.borrow().to_string(), sid } );
+		broadcast( &ServerMsg::UserLeft { time: Utc::now().timestamp(), nick: nick.borrow().to_string(), sid } );
 
 
 		debug!( "Client disconnected: {}", peer_addr );
