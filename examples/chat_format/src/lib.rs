@@ -47,7 +47,7 @@ pub enum ServerMsg
 	ChatMsg     { nick : String, sid: usize, txt: String  } ,
 	UserJoined  { nick : String, sid: usize               } ,
 	UserLeft    { nick : String, sid: usize               } ,
-	NickChanged { old  : String, new: String              } ,
+	NickChanged { old  : String, sid: usize, new: String  } ,
 	Welcome     { users: Vec<(usize,String)>, txt: String } ,
 }
 

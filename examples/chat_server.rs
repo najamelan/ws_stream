@@ -6,12 +6,12 @@
 
 use
 {
-	chat_format   :: { futures_serde_cbor::Codec, Wire, ClientMsg, ServerMsg } ,
-	log           :: { *                                                            } ,
-	ws_stream     :: { *                                                            } ,
-	async_runtime :: { rt, RtConfig                                                 } ,
-	std           :: { env, cell::RefCell, collections::HashMap, net::SocketAddr    } ,
-	futures_codec :: { Framed                                                       } ,
+	chat_format   :: { futures_serde_cbor::Codec, Wire, ClientMsg, ServerMsg             } ,
+	log           :: { *                                                                 } ,
+	ws_stream     :: { *                                                                 } ,
+	async_runtime :: { rt, RtConfig                                                      } ,
+	std           :: { env, cell::RefCell, collections::HashMap, net::SocketAddr, rc::Rc } ,
+	futures_codec :: { Framed                                                            } ,
 	// rand          :: { thread_rng, Rng, distributions::Alphanumeric              } ,
 
 	futures ::
@@ -29,7 +29,7 @@ type ConnMap = RefCell< HashMap<SocketAddr, Connection> >;
 
 struct Connection
 {
-	nick     : String                ,
+	nick     : Rc<RefCell<String>>   ,
 	sid      : usize                 ,
 	tx       : UnboundedSender<Wire> ,
 }
@@ -46,7 +46,7 @@ thread_local!
 
 fn main()
 {
-	flexi_logger::Logger::with_str( "echo=trace, ws_stream=error, tokio=warn" ).start().unwrap();
+	flexi_logger::Logger::with_str( "chat_server=trace, ws_stream=error, tokio=warn" ).start().unwrap();
 
 	// We only need one thread.
 	//
@@ -68,6 +68,9 @@ fn main()
 
 
 
+// Runs once for each incoming connection, ends when the stream closes or sending causes an
+// error.
+//
 async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 {
 	let ws_stream = stream.expect( "tcp stream" ).await.expect( "ws handshake" );
@@ -78,11 +81,16 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 	let (tx, rx)            = unbounded();
 	let framed              = Framed::new( ws_stream, Codec::new() );
 	let (mut out, mut msgs) = framed.split();
-	let mut nick            = peer_addr.to_string();
+	let nick                = Rc::new( RefCell::new( peer_addr.to_string() ) );
 
 	// A unique sender id for this client
 	//
 	let sid: usize          = CLIENT.with( |cnt| { *cnt.borrow_mut() += 1; cnt.borrow().clone() } );
+
+
+	// Let all clients know there is a new kid on the block
+	//
+	broadcast( &ServerMsg::UserJoined { nick: nick.borrow().to_string(), sid } );
 
 
 	// Welcome message
@@ -97,7 +105,7 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 			Connection { tx, nick: nick.clone(), sid },
 		);
 
-		conns.borrow().values().map( |c| (c.sid, c.nick.clone()) ).collect()
+		conns.borrow().values().map( |c| (c.sid, c.nick.borrow().to_string() )).collect()
 	});
 
 	out.send( Wire::Server( ServerMsg::Welcome
@@ -109,20 +117,30 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 
 
 
+	let nick2 = nick.clone();
 
-
+	// Listen to the channel for this connection and sends out each message that
+	// arrives on the channel.
+	//
 	let outgoing = async move
 	{
-		// Send out to the client all messages that come in over the channel
-		//
 		match rx.map( |res| Ok( res ) ).forward( out ).await
 		{
 			Err(e) =>
 			{
-				CONNS.with( |conns| conns.borrow_mut().remove( &peer_addr ) );
+				let user = CONNS.with( |conns| conns.borrow_mut().remove( &peer_addr ) );
 
-				info!( "Client disconnected: {}", peer_addr );
-				error!( "{}", e );
+				if user.is_some()
+				{
+					// let other clients know this client disconnected
+					//
+					broadcast( &ServerMsg::UserLeft { nick: nick2.borrow().to_string(), sid } );
+
+
+					debug!( "Client disconnected: {}", peer_addr );
+					debug!( "{}", e );
+				}
+
 			},
 
 			Ok(_)  => {}
@@ -135,7 +153,7 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 
 
 
-	// Incoming messages
+	// Incoming messages. Ends when stream returns None or an error.
 	//
 	while let Some( msg ) = msgs.next().await
 	{
@@ -152,17 +170,33 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 		{
 			ClientMsg::SetNick( new_nick ) =>
 			{
-				broadcast( &ServerMsg::ServerMsg( format!( "{} changed nick => {}\n", &nick, &new_nick ) ) );
-				nick = new_nick;
+				broadcast( &ServerMsg::NickChanged{ old: nick.borrow().to_string(), new: new_nick.clone(), sid } );
+				*nick.borrow_mut() = new_nick;
 			}
 
 
 			ClientMsg::ChatMsg( txt ) =>
 			{
-				broadcast( &ServerMsg::ChatMsg { nick: nick.clone(), sid, txt } );
+				broadcast( &ServerMsg::ChatMsg { nick: nick.borrow().to_string(), sid, txt } );
 			}
 		}
 	};
+
+
+	// remove the client and let other clients know this client disconnected
+	//
+	let user = CONNS.with( |conns| conns.borrow_mut().remove( &peer_addr ) );
+
+	if user.is_some()
+	{
+		// let other clients know this client disconnected
+		//
+		broadcast( &ServerMsg::UserLeft { nick: nick.borrow().to_string(), sid } );
+
+
+		debug!( "Client disconnected: {}", peer_addr );
+	}
+
 }
 
 
