@@ -25,11 +25,14 @@ pub enum ClientMsg
 //
 pub enum ServerMsg
 {
-	ServerMsg   { time: i64, txt: String                             } ,
-	ChatMsg     { time: i64, nick : String, sid: usize, txt: String  } ,
-	UserJoined  { time: i64, nick : String, sid: usize               } ,
-	UserLeft    { time: i64, nick : String, sid: usize               } ,
-	NickChanged { time: i64, old  : String, sid: usize, new: String  } ,
-	Welcome     { time: i64, users: Vec<(usize,String)>, txt: String } ,
+	ServerMsg     { time: i64, txt  : String                           } ,
+	ChatMsg       { time: i64, nick : String, sid: usize, txt: String  } ,
+	UserJoined    { time: i64, nick : String, sid: usize               } ,
+	UserLeft      { time: i64, nick : String, sid: usize               } ,
+	NickChanged   { time: i64, old  : String, sid: usize, new: String  } ,
+	NickUnchanged { time: i64, nick : String, sid: usize               } ,
+	NickInUse     { time: i64, nick : String, sid: usize               } ,
+	NickInvalid   { time: i64, nick : String, sid: usize               } ,
+	Welcome       { time: i64, users: Vec<(usize,String)>, txt: String } ,
 }
 

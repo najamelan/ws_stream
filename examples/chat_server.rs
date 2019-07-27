@@ -9,6 +9,7 @@ use
 	chat_format   :: { futures_serde_cbor::Codec, ClientMsg, ServerMsg                   } ,
 	chrono        :: { Utc                                                               } ,
 	log           :: { *                                                                 } ,
+	regex         :: { Regex                                                             } ,
 	ws_stream     :: { *                                                                 } ,
 	async_runtime :: { rt, RtConfig                                                      } ,
 	std           :: { env, cell::RefCell, collections::HashMap, net::SocketAddr, rc::Rc } ,
@@ -106,7 +107,7 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 			Connection { tx, nick: nick.clone(), sid },
 		);
 
-		conns.borrow().values().map( |c| (c.sid, c.nick.borrow().to_string() )).collect()
+		conns.borrow().values().map( |c| (c.sid, c.nick.borrow().clone() )).collect()
 	});
 
 	out.send( ServerMsg::Welcome
@@ -136,7 +137,7 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 				{
 					// let other clients know this client disconnected
 					//
-					broadcast( &ServerMsg::UserLeft { time: Utc::now().timestamp(), nick: nick2.borrow().to_string(), sid } );
+					broadcast( &ServerMsg::UserLeft { time: Utc::now().timestamp(), nick: nick2.borrow().clone(), sid } );
 
 
 					debug!( "Client disconnected: {}", peer_addr );
@@ -174,8 +175,19 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 		{
 			ClientMsg::SetNick( new_nick ) =>
 			{
-				broadcast( &ServerMsg::NickChanged{ time, old: nick.borrow().to_string(), new: new_nick.clone(), sid } );
-				*nick.borrow_mut() = new_nick;
+				let res = validate_nick( sid, &nick.borrow().clone(), &new_nick );
+
+				match res
+				{
+					Ok ( m ) =>
+					{
+						broadcast( &m );
+						*nick.borrow_mut() = new_nick;
+					}
+
+					Err( m ) => send( sid, m ),
+				}
+
 			}
 
 
@@ -218,6 +230,66 @@ fn broadcast( msg: &ServerMsg )
 			client.unbounded_send( msg.clone() ).expect( "send on unbounded" );
 		};
 	});
+}
+
+
+
+// Send a server message to all connected clients
+//
+fn send( sid: usize, msg: ServerMsg )
+{
+	CONNS.with( |conns|
+	{
+		for client in conns.borrow().values().filter( |c| c.sid == sid ).map( |c| &c.tx )
+		{
+			client.unbounded_send( msg.clone() ).expect( "send on unbounded" );
+		};
+	});
+}
+
+
+
+// Send a server message to all connected clients
+//
+fn validate_nick( sid: usize, old: &str, new: &str ) -> Result<ServerMsg, ServerMsg>
+{
+	// Check whether it's unchanged
+	//
+	if old == new
+	{
+		return Err( ServerMsg::NickUnchanged{ time: Utc::now().timestamp(), sid, nick: old.to_string() } );
+	}
+
+
+	let mut exists = false;
+
+	// Check whether it's not already in use
+	//
+	CONNS.with( |conns|
+	{
+		exists = conns.borrow().values().any( |c| *c.nick.borrow() == new );
+	});
+
+	if exists
+	{
+		return Err( ServerMsg::NickInUse{ time: Utc::now().timestamp(), sid, nick: new.to_string() } )
+ 	}
+
+
+	// Check whether it's valid
+	//
+	let nickre   = Regex::new( r"^\w{1,15}$" ).unwrap();
+
+	if !nickre.is_match( new )
+	{
+		error!( "Wrong nick: '{}'", new );
+		return Err( ServerMsg::NickInvalid{ time: Utc::now().timestamp(), sid, nick: new.to_string() } )
+	}
+
+
+	// It's valid
+	//
+	Ok( ServerMsg::NickChanged{ time: Utc::now().timestamp(), old: old.to_string(), new: new.to_string(), sid } )
 }
 
 
