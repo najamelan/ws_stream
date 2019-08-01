@@ -1,6 +1,7 @@
 # Auto-generated from "Cargo.yml"
 [dependencies]
 bytes = "^0.4"
+failure = "^0.1"
 futures_codec = "^0.2"
 serde_cbor = "^0.10"
 

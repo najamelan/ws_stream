@@ -14,6 +14,7 @@ use
 	async_runtime :: { rt, RtConfig                                                      } ,
 	std           :: { env, cell::RefCell, collections::HashMap, net::SocketAddr, rc::Rc } ,
 	futures_codec :: { Framed                                                            } ,
+	futures       :: { sink::SinkExt                                                     } ,
 	// rand          :: { thread_rng, Rng, distributions::Alphanumeric              } ,
 
 	futures ::
@@ -21,7 +22,6 @@ use
 		StreamExt                                     ,
 		compat::Compat01As03                          ,
 		channel::mpsc::{ unbounded, UnboundedSender } ,
-		sink::SinkExt                                 ,
 	},
 };
 
@@ -80,45 +80,15 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 
 	println!( "Incoming connection from: {}", peer_addr );
 
-	let (tx, rx)            = unbounded();
-	let framed              = Framed::new( ws_stream, Codec::new() );
-	let (mut out, mut msgs) = framed.split();
-	let nick                = Rc::new( RefCell::new( peer_addr.to_string() ) );
+	let (mut tx, rx)    = unbounded();
+	let framed          = Framed::new( ws_stream, Codec::new() );
+	let (out, mut msgs) = framed.split();
+	let nick            = Rc::new( RefCell::new( peer_addr.to_string() ) );
 
 	// A unique sender id for this client
 	//
-	let sid: usize          = CLIENT.with( |cnt| { *cnt.borrow_mut() += 1; cnt.borrow().clone() } );
-
-
-	// Let all clients know there is a new kid on the block
-	//
-	broadcast( &ServerMsg::UserJoined { time: Utc::now().timestamp(), nick: nick.borrow().to_string(), sid } );
-
-
-	// Welcome message
-	//
-	println!( "sending welcome message" );
-
-	let all_users = CONNS.with( |conns|
-	{
-		conns.borrow_mut().insert
-		(
-			peer_addr,
-			Connection { tx, nick: nick.clone(), sid },
-		);
-
-		conns.borrow().values().map( |c| (c.sid, c.nick.borrow().clone() )).collect()
-	});
-
-	out.send( ServerMsg::Welcome
-	{
-		time : Utc::now().timestamp() ,
-		txt  : WELCOME.to_string()    ,
-		users: all_users              ,
-
-	}).await.expect( "send welcome" );
-
-
+	let     sid: usize  = CLIENT.with( |cnt| { *cnt.borrow_mut() += 1; cnt.borrow().clone() } );
+	let mut joined      = false;
 
 	let nick2 = nick.clone();
 
@@ -173,6 +143,61 @@ async fn handle_conn( stream: Result<Compat01As03<Accept>, WsErr> )
 
 		match msg
 		{
+			ClientMsg::Join( new_nick ) =>
+			{
+				// Clients should only join once. Since nothing bad can happen here,
+				// we just ignore this message
+				//
+				if joined { continue; }
+
+				let res = validate_nick( sid, &nick.borrow().clone(), &new_nick );
+
+				match res
+				{
+					Ok(_) =>
+					{
+						joined             = true;
+						*nick.borrow_mut() = new_nick.clone();
+
+						// Let all clients know there is a new kid on the block
+						//
+						broadcast( &ServerMsg::UserJoined { time: Utc::now().timestamp(), nick: new_nick, sid } );
+
+						// Welcome message
+						//
+						println!( "sending welcome message" );
+
+						let all_users = CONNS.with( |conns|
+						{
+							conns.borrow_mut().insert
+							(
+								peer_addr,
+								Connection { tx: tx.clone(), nick: nick.clone(), sid },
+							);
+
+							conns.borrow().values().map( |c| (c.sid, c.nick.borrow().clone() )).collect()
+						});
+
+						let welcome = ServerMsg::Welcome
+						{
+							time : Utc::now().timestamp() ,
+							txt  : WELCOME.to_string()    ,
+							users: all_users              ,
+						};
+
+						send( sid, ServerMsg::JoinSuccess );
+						send( sid, welcome );
+					}
+
+					Err( m ) =>
+					{
+						tx.send( m ).await.expect( "send on channel" );
+					}
+				}
+
+			}
+
+
 			ClientMsg::SetNick( new_nick ) =>
 			{
 				let res = validate_nick( sid, &nick.borrow().clone(), &new_nick );
