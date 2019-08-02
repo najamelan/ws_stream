@@ -30,7 +30,7 @@ regex = "^1"
 
 [dev-dependencies.async_runtime]
 package = "naja_async_runtime"
-version = "^0.1.7"
+version = "^0.3"
 
 [dev-dependencies.chat_format]
 path = "examples/chat_format"
