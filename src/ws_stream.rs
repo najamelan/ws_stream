@@ -114,84 +114,97 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 	{
 		trace!( "WsStream: read called" );
 
-		loop
+		loop { match &mut self.state
 		{
-			match &mut self.state
+			ReadState::Ready { chunk, chunk_start } =>
 			{
-				ReadState::Ready { chunk, chunk_start } =>
+				trace!( "io_read: received message" );
+
+				let end = cmp::min( *chunk_start + buf.len(), chunk.len() );
+				let len = end - *chunk_start;
+
+				buf[..len].copy_from_slice( &chunk[*chunk_start..end] );
+
+
+				if chunk.len() == end
 				{
-					trace!( "io_read: received message" );
+					self.state = ReadState::PendingChunk;
+				}
 
-					let end = cmp::min( *chunk_start + buf.len(), chunk.len() );
-					let len = end - *chunk_start;
-
-					buf[..len].copy_from_slice( &chunk[*chunk_start..end] );
-
-
-					if chunk.len() == end
-					{
-						self.state = ReadState::PendingChunk;
-					}
-
-					else
-					{
-						*chunk_start = end;
-					}
-
-
-					return Ok( len );
+				else
+				{
+					*chunk_start = end;
 				}
 
 
-				ReadState::PendingChunk =>
+				return Ok( len );
+			}
+
+
+			ReadState::PendingChunk =>
+			{
+				trace!( "io_read: pending" );
+
+				match self.stream.poll()
 				{
-					trace!( "io_read: pending" );
-
-					match self.stream.poll()
+					// We have a message
+					//
+					Ok( Async::Ready( Some( chunk ) ) ) =>
 					{
-						// We have a message
+						// Check for tungstenite::Message::Close and return EOF
+						// TODO: provide observable events?
 						//
-						Ok( Async::Ready( Some( chunk ) ) ) =>
+						if let tungstenite::Message::Close( close_frame ) = chunk
 						{
-							self.state = ReadState::Ready { chunk: chunk.into(), chunk_start: 0 };
-							continue;
-						}
+							match close_frame
+							{
+								Some(f) => trace!( "io_read: connection is closed by client with code: {} and reason: {}", f.code, f.reason ),
+								None    => trace!( "io_read: connection is closed by client without code and reason." ),
+							}
 
-						// The stream has ended
-						//
-						Ok( Async::Ready( None ) ) =>
-						{
-							trace!( "io_read: stream has ended" );
 							return Ok( 0 );
 						}
 
-						// No chunk yet, save the task to be woken up
+						// Otherwise transform it into a Vec<u8>
 						//
-						Ok( Async::NotReady ) =>
-						{
-							trace!( "io_read: stream would_block" );
+						self.state = ReadState::Ready { chunk: chunk.into(), chunk_start: 0 };
+						continue;
+					}
 
-							return Err( io::Error::from( WouldBlock ) );
+					// The stream has ended
+					//
+					Ok( Async::Ready( None ) ) =>
+					{
+						trace!( "io_read: stream has ended" );
+						return Ok( 0 );
+					}
+
+					// No chunk yet, save the task to be woken up
+					//
+					Ok( Async::NotReady ) =>
+					{
+						trace!( "io_read: stream would_block" );
+
+						return Err( io::Error::from( WouldBlock ) );
+					}
+
+					Err(err) =>
+					{
+						error!( "{}", err );
+
+						match err
+						{
+							tungstenite::error::Error::Io(e) => { return Err( e ) }
+
+							// These can be connection closed, amongst others
+							//
+							_ => { return Ok(0) }
 						}
 
-						Err(err) =>
-						{
-							error!( "{}", err );
-
-							match err
-							{
-								tungstenite::error::Error::Io(e) => { return Err( e ) }
-
-								// These can be connection closed, amongst others
-								//
-								_ => { return Ok(0) }
-							}
-
-						}
 					}
 				}
 			}
-		}
+		}}
 	}
 
 
