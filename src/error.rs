@@ -9,54 +9,88 @@ use crate::{ import::* };
 //
 pub struct WsErr
 {
-	inner: FailContext<WsErrKind>,
+	pub(crate) inner: Option< Box<dyn StdError + Send> >,
+	pub(crate) kind : WsErrKind,
 }
 
 
 
 /// The different kind of errors that can happen when you use the `ws_stream` API.
 //
-#[ derive( Clone, PartialEq, Eq, Debug, Fail ) ]
+#[ derive( Debug ) ]
 //
 pub enum WsErrKind
 {
 	/// This is an error from tokio-tungstenite.
 	//
-	#[ fail( display = "The WebSocket handshake failed" ) ]
-	//
 	WsHandshake,
 
 	/// An error happend on the tcp level when connecting.
 	//
-	#[ fail( display = "A tcp connection error happened" ) ]
-	//
 	TcpConnection,
+
+	/// A tungstenite error.
+	//
+	TungErr,
+
+	/// A tungstenite error.
+	//
+	WarpErr,
+
+	/// A tungstenite error.
+	//
+	Protocol,
+
+	#[ doc( hidden ) ]
+	//
+	__NonExhaustive__
 }
 
 
 
-impl Fail for WsErr
+impl StdError for WsErr
 {
-	fn cause( &self ) -> Option< &dyn Fail >
+	fn source( &self ) -> Option< &(dyn StdError + 'static) >
 	{
-		self.inner.cause()
-	}
-
-	fn backtrace( &self ) -> Option< &Backtrace >
-	{
-		self.inner.backtrace()
+		self.inner.as_ref().map( |e| e.deref() as &(dyn StdError + 'static) )
 	}
 }
 
+
+
+
+impl fmt::Display for WsErrKind
+{
+	fn fmt( &self, f: &mut fmt::Formatter<'_> ) -> fmt::Result
+	{
+		match self
+		{
+			Self::WsHandshake   => fmt::Display::fmt( "The WebSocket handshake failed.", f ) ,
+			Self::TcpConnection => fmt::Display::fmt( "A tcp connection error happened.", f ) ,
+			Self::TungErr       => fmt::Display::fmt( "A tungstenite error happened.", f ) ,
+			Self::WarpErr       => fmt::Display::fmt( "WarpErr:", f ) ,
+			Self::Protocol      => fmt::Display::fmt( "The remote committed a websocket protocol violation.", f ) ,
+
+			_ => unreachable!(),
+		}
+	}
+}
 
 
 impl fmt::Display for WsErr
 {
 	fn fmt( &self, f: &mut fmt::Formatter<'_> ) -> fmt::Result
 	{
-		fmt::Display::fmt( &self.inner, f )
+		let inner = match self.source()
+		{
+			Some(e) => format!( " Caused by: {}", e ),
+			None    => String::new()              ,
+		};
+
+		write!( f, "ws_stream::Error: {}{}", self.kind, inner )
 	}
 }
+
 
 
 impl WsErr
@@ -65,7 +99,7 @@ impl WsErr
 	//
 	pub fn kind( &self ) -> &WsErrKind
 	{
-		self.inner.get_context()
+		&self.kind
 	}
 }
 
@@ -73,15 +107,34 @@ impl From<WsErrKind> for WsErr
 {
 	fn from( kind: WsErrKind ) -> WsErr
 	{
-		WsErr { inner: FailContext::new( kind ) }
+		WsErr { inner: None, kind }
 	}
 }
 
-impl From< FailContext<WsErrKind> > for WsErr
+
+
+impl From< TungErr > for WsErr
 {
-	fn from( inner: FailContext<WsErrKind> ) -> WsErr
+	fn from( inner: TungErr ) -> WsErr
 	{
-		WsErr { inner }
+		let kind = match inner
+		{
+			TungErr::Protocol(_) => WsErrKind::Protocol,
+			_                    => WsErrKind::TungErr ,
+		};
+
+		WsErr { inner: Some( Box::new( inner ) ), kind }
+	}
+}
+
+
+#[cfg( feature = "warp" )]
+//
+impl From< WarpErr > for WsErr
+{
+	fn from( inner: WarpErr ) -> WsErr
+	{
+		WsErr { inner: Some( Box::new( inner ) ), kind: WsErrKind::WarpErr }
 	}
 }
 

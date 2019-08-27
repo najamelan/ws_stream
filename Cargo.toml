@@ -1,15 +1,14 @@
 # Auto-generated from "Cargo.yml"
 [dependencies]
-failure = "^0.1"
 log = "^0.4"
 pin-utils = "^0.1.0-alpha.4"
-tokio-tungstenite = "^0.8"
-tungstenite = "^0.8"
-url = "^1"
+tokio-tungstenite = "^0.9"
+tungstenite = "^0.9"
+url = "^2"
 
 [dependencies.futures-preview]
 features = ["io-compat", "compat"]
-version = "0.3.0-alpha.17"
+version = "^0.3.0-alpha"
 
 [dependencies.futures_01]
 package = "futures"
@@ -20,20 +19,23 @@ default-features = false
 features = ["codec", "tcp"]
 version = "^0.1"
 
+[dependencies.warp]
+optional = true
+version = "^0.1"
+
 [dev-dependencies]
-chrono = "^0.4"
 flexi_logger = "^0.11"
-futures_codec = "^0.2"
 pretty_assertions = "^0.6"
-rand = "^0.7"
-regex = "^1"
 
 [dev-dependencies.async_runtime]
 package = "naja_async_runtime"
 version = "^0.3"
 
-[dev-dependencies.chat_format]
-path = "examples/chat_format"
+[dev-dependencies.futures_codec]
+path = "../futures-codec"
+
+[features]
+default = ["warp"]
 
 [package]
 authors = ["Naja Melan <najamelan@autistici.org>"]
@@ -48,6 +50,11 @@ name = "ws_stream"
 readme = "README.md"
 repository = "https://github.com/najamelan/ws_stream"
 version = "0.1.0"
+
+[patch]
+[patch.crates-io]
+[patch.crates-io.futures-preview]
+path = "../futures-rs/futures"
 
 [profile]
 [profile.release]

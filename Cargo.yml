@@ -14,29 +14,40 @@ package:
   categories    : []
 
 
+features:
+
+  # just for development, enable it by default
+  #
+  default: [warp]
+
+
 dependencies:
 
-  failure           : ^0.1
-  futures-preview   : { version: 0.3.0-alpha.17, features: [io-compat, compat] }
+  futures-preview   : { version: ^0.3.0-alpha, features: [io-compat, compat] }
   futures_01        : { version: ^0.1, package: futures }
   log               : ^0.4
   tokio             : { version: ^0.1, default-features: false, features: [codec, tcp] }
-  tungstenite       : ^0.8
-  tokio-tungstenite : ^0.8
-  url               : ^1
+  tungstenite       : ^0.9
+  tokio-tungstenite : ^0.9
+  url               : ^2
   pin-utils         : ^0.1.0-alpha.4
+  warp              : { version: ^0.1, optional: true }
 
 dev-dependencies:
 
-  chrono           : ^0.4
   pretty_assertions: ^0.6
-  flexi_logger     : ^0.11
+  futures_codec    : { path: ../futures-codec }
   async_runtime    : { version: ^0.3, package: naja_async_runtime }
-  futures_codec    : ^0.2
-  regex            : ^1
-  rand             : ^0.7
-  chat_format      : { path: examples/chat_format }
+  flexi_logger     : ^0.11
+
 
 profile:
   release:
     debug: true
+
+
+patch:
+
+  crates-io:
+
+    futures-preview : { path: ../futures-rs/futures }

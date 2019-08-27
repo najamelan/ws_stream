@@ -1,124 +1,69 @@
-use crate::{ import::*, WsErr, WsErrKind, Connections };
+use crate::{ import::*, WsErr, Message, MessageKind, WsErrKind, /*Incoming*/ };
 
-
-type AsyncTokioResult = Result< Async<()>, tokio::io::Error >;
 
 
 #[derive(Debug, Clone)]
 //
 enum ReadState
 {
-	Ready { chunk: Vec<u8>, chunk_start: usize } ,
+	Ready { msg: Message, chunk_start: usize } ,
 	PendingChunk                                 ,
 }
 
 
-/// Represents a duplex stream of bytes on top of a websocket connection. This type implements AsyncRead/Write
-/// from both tokio and futures 0.3.
-///
-/// Convenience methods are provided for TCP as underlying stream, but it can work over any tokio-tungstenite
-/// websocket, so on top of any tokio AsyncRead/AsyncWrite.
-///
-/// Both server (listen) and client (connect) are available, even though this library is mainly intended
-/// to be the server end of wasm modules that need to communicate over an AsyncRead.
-///
+
+/// Trait bounds
 //
-pub struct WsStream<S: AsyncRead01 + AsyncWrite01>
+pub trait MsgStream: Stream<Item=Result<Message, WsErr>> + Sink<Message, Error=WsErr> {}
+
+impl<S> MsgStream for S
+
+	where S: Stream<Item=Result<Message, WsErr>> + Sink<Message, Error=WsErr>,
+
+{}
+
+
+
+/// takes a Stream + Sink of websocket messages and implements AsyncRead + AsyncWrite
+//
+pub struct WsStream<Inner: MsgStream>
 {
-	stream : SplitStream < WebSocketStream<S> >,
-	sink   : SplitSink   < WebSocketStream<S> >,
-	state  : ReadState                         ,
-	peer   : Option< SocketAddr >              ,
+	stream : SplitStream< Inner >          ,
+	sink   : SplitSink  < Inner, Message > ,
+	state  : ReadState                     ,
 }
 
 
 
-impl WsStream<TcpStream>
-{
-	/// Listen over tcp. This will return a stream of WsStream, one for each incoming connection.
-	//
-	pub fn listen< T: AsRef<str> >( url: T )  -> Connections
-	{
-		let addr = url.as_ref().parse().unwrap();
-
-		// Create the event loop and TCP listener we'll accept connections on.
-		//
-		let socket = TcpListener::bind( &addr ).unwrap();
-		info!( "Listening on: {}", addr );
-
-		Connections::new( socket.incoming().compat() )
-	}
-
-
-	/// Connect to a websocket over tcp.
-	//
-	pub async fn connect< T: AsRef<str> >( url: T ) -> Result< Self, WsErr >
-	{
-		let addr = url.as_ref().parse().expect( "parse socketaddress" );
-
-		// Create the event loop and TCP listener we'll accept connections on.
-		//
-		let socket = TcpStream::connect( &addr ).compat().await;
-		info!( "WsStream: connecting to: {}", addr );
-
-		let url = "ws://".to_string() + url.as_ref() + "/";
-
-		match socket
-		{
-			Ok(tcpstream) =>
-			{
-				// We need the ok and then because client_async does io outside of the future it returns.
-				// See: https://github.com/snapview/tokio-tungstenite/issues/55
-				//
-				match ok(()).and_then( |_| { client_async( Url::parse( &url ).expect( "parse url" ), tcpstream ) } ).compat().await
-				{
-					Ok (ws) => Ok( Self::new( ws.0, Some( addr ) ) ),
-					Err(e ) =>
-					{
-						error!( "{}", &e );
-						Err( WsErrKind::WsHandshake.into() )
-					},
-				}
-			}
-
-			Err(e) => Err( e.context( WsErrKind::TcpConnection ).into() ),
-		}
-	}
-
-
-	/// If the WsStream was created with a peer_addr set, you can retrieve it here.
-	//
-	pub fn peer_addr( &self ) -> Option<SocketAddr>
-	{
-		self.peer
-	}
-}
-
-
-
-impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
+impl<Inner: MsgStream> WsStream<Inner>
 {
 	/// Create a WsStream
 	//
-	pub fn new( ws: WebSocketStream<S>, peer: Option<SocketAddr> ) -> Self
+	pub fn new( ws: Inner ) -> Self
 	{
 		let (sink, stream) = ws.split();
 
-		Self{ stream, sink, state: ReadState::PendingChunk, peer }
+		Self{ stream, sink, state: ReadState::PendingChunk }
 	}
+}
 
 
+
+impl<Inner: MsgStream> WsStream<Inner>
+{
 	//---------- impl io::Read
 	//
-	fn io_read( &mut self, buf: &mut [u8] ) -> io::Result< usize >
+	fn poll_read_impl( &mut self, cx: &mut Context<'_>, buf: &mut [u8] ) -> Poll< io::Result<usize> >
 	{
 		trace!( "WsStream: read called" );
 
 		loop { match &mut self.state
 		{
-			ReadState::Ready { chunk, chunk_start } =>
+			ReadState::Ready { msg, chunk_start } =>
 			{
 				trace!( "io_read: received message" );
+
+				let chunk = msg.as_bytes();
 
 				let end = cmp::min( *chunk_start + buf.len(), chunk.len() );
 				let len = end - *chunk_start;
@@ -126,18 +71,14 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 				buf[..len].copy_from_slice( &chunk[*chunk_start..end] );
 
 
-				if chunk.len() == end
-				{
-					self.state = ReadState::PendingChunk;
-				}
+				// We read the entire chunk
+				//
+				if chunk.len() == end { self.state = ReadState::PendingChunk }
+				else                  { *chunk_start = end                   }
 
-				else
-				{
-					*chunk_start = end;
-				}
+				trace!( "io_read: return read {}", len );
 
-
-				return Ok( len );
+				return Poll::Ready( Ok(len) );
 			}
 
 
@@ -145,62 +86,56 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 			{
 				trace!( "io_read: pending" );
 
-				match self.stream.poll()
+				match Pin::new( &mut self.stream ).poll_next(cx)
 				{
 					// We have a message
 					//
-					Ok( Async::Ready( Some( chunk ) ) ) =>
+					Poll::Ready(Some(Ok( msg ))) =>
 					{
 						// Check for tungstenite::Message::Close and return EOF
 						// TODO: provide observable events?
 						//
-						if let tungstenite::Message::Close( close_frame ) = chunk
+						if msg.kind() == MessageKind::Close
 						{
-							match close_frame
+							match msg.close_frame()
 							{
 								Some(f) => trace!( "io_read: connection is closed by client with code: {} and reason: {}", f.code, f.reason ),
 								None    => trace!( "io_read: connection is closed by client without code and reason." ),
 							}
 
-							return Ok( 0 );
+							return Poll::Ready( Ok(0) );
 						}
+
+
 
 						// Otherwise transform it into a Vec<u8>
 						//
-						self.state = ReadState::Ready { chunk: chunk.into(), chunk_start: 0 };
+						self.state = ReadState::Ready { msg, chunk_start: 0 };
 						continue;
 					}
 
 					// The stream has ended
 					//
-					Ok( Async::Ready( None ) ) =>
+					Poll::Ready( None ) =>
 					{
 						trace!( "io_read: stream has ended" );
-						return Ok( 0 );
+						return Poll::Ready( Ok(0) );
 					}
 
 					// No chunk yet, save the task to be woken up
 					//
-					Ok( Async::NotReady ) =>
+					Poll::Pending =>
 					{
 						trace!( "io_read: stream would_block" );
 
-						return Err( io::Error::from( WouldBlock ) );
+						return Poll::Pending;
 					}
 
-					Err(err) =>
+					Poll::Ready(Some( Err(err) )) =>
 					{
 						error!( "{}", err );
 
-						match err
-						{
-							tungstenite::error::Error::Io(e) => { return Err( e ) }
-
-							// These can be connection closed, amongst others
-							//
-							_ => { return Ok(0) }
-						}
-
+						return Poll::Ready(Err( Self::to_io_error(err) ))
 					}
 				}
 			}
@@ -211,228 +146,165 @@ impl<S: AsyncRead01 + AsyncWrite01> WsStream<S>
 
 	// -------io:Write impl
 	//
-	fn io_write( &mut self, buf: &[u8] ) -> io::Result< usize >
+	fn poll_write_impl( &mut self, cx: &mut Context, buf: &[u8] ) -> Poll< io::Result<usize> >
 	{
-		trace!( "WsStream: io_write called" );
+		trace!( "WsStream: poll_write_impl called" );
+
+		let res = ready!( Pin::new( &mut self.sink ).poll_ready(cx) );
+
+		if let Err( e ) = res
+		{
+			trace!( "WsStream: poll_write_impl SINK not READY" );
+
+			return Poll::Ready(Err( Self::to_io_error(e) ))
+		}
+
 
 		// FIXME: avoid extra copy?
+		// The type of our sink is Message, but to create that you always have to decide whether
+		// it's a TungMessage or a WarpMessage. Since converting from WarpMessage to TungMessage requires a
+		// copy, we create it from TungMessage.
+		// TODO: create a constructor on Message that automatically defaults to TungMessage here.
 		//
-		match self.sink.start_send( buf.into() )
+		match Pin::new( &mut self.sink ).start_send( TungMessage::Binary( buf.into() ).into() )
 		{
-			Ok( AsyncSink::Ready       ) => { return Ok( buf.len() ); }
-			Ok( AsyncSink::NotReady(_) ) => { trace!( "io_write: would block" ); return Err( io::Error::from( WouldBlock ) ) }
-
-			Err(e) =>
+			Ok (_) =>
 			{
-				match e
-				{
-					// The connection is closed normally, probably by the remote.
-					//
-					tungstenite::Error::ConnectionClosed =>
-					{
-						error!( "{}", e );
-						return Err( io::Error::from( io::ErrorKind::NotConnected ) );
-					}
+				// The Compat01As03Sink always keeps one item buffered. Also, client code like
+				// futures-codec and tokio-codec turn a flush on their sink in a poll_write here.
+				// Combinators like CopyBufInto will only call flush after their entire input
+				// stream is exhausted.
+				// We actually don't buffer here, but always create an entire websocket message from the
+				// buffer we get in poll_write, so there is no reason not to flush here, especially
+				// since the sink will always buffer one item until flushed.
+				// This means the burden is on the caller to call with a buffer of sufficient size
+				// to avoid perf problems, but there is BufReader and BufWriter in the futures library to
+				// help with that if necessary.
+				//
+				// We will ignore the Pending return from the flush, since we took the data and
+				// must return how many bytes we took. The client should not try to send this data again.
+				// This does mean there might be a spurious wakeup, TODO: we should test that.
+				// We could supply a dummy context to avoid the wakup.
+				//
+				// So, flush!
+				//
+				let _ = Pin::new( &mut self.sink ).poll_flush( cx );
 
-					// Trying to work with an already closed connection.
-					//
-					tungstenite::Error::AlreadyClosed =>
-					{
-						error!( "{}", e );
-						return Err( io::Error::from( io::ErrorKind::ConnectionAborted ) );
-					}
+				trace!( "WsStream: poll_write_impl, wrote {} bytes", buf.len() );
 
-					_ =>
-					{
-						error!( "{}", e );
-						return Err( io::Error::from( io::ErrorKind::Other ) )
-					}
-				}
+				Poll::Ready(Ok ( buf.len() ))
 			}
+
+			Err(e) => Poll::Ready(Err( Self::to_io_error(e) )),
 		}
 	}
 
 
 
-	fn io_flush( &mut self ) -> io::Result<()>
+	fn poll_flush_impl( &mut self, cx: &mut Context ) -> Poll< io::Result<()> >
 	{
 		trace!( "flush AsyncWrite" );
 
-		match self.sink.poll_complete()
+		match ready!( Pin::new( &mut self.sink ).poll_flush(cx) )
 		{
-			Ok ( Async::Ready(_) ) => { return Ok ( () )                                                               }
-			Ok ( Async::NotReady ) => { trace!( "io_flush: would block" ); return Err( io::Error::from( WouldBlock ) ) }
+			Ok (_) => Poll::Ready(Ok ( ()                     )) ,
+			Err(e) => Poll::Ready(Err( Self::to_io_error( e ) )) ,
+		}
+	}
 
-			Err(e) =>
+
+	fn poll_close_impl( &mut self, cx: &mut Context ) -> Poll< io::Result<()> >
+	{
+		trace!( "Closing AsyncWrite" );
+
+		match Pin::new( &mut self.sink ).poll_close( cx )
+		{
+			Poll::Ready( Err(e) ) =>
 			{
-				match e
-				{
-					// The connection is closed normally, probably by the remote.
-					//
-					tungstenite::Error::ConnectionClosed =>
-					{
-						error!( "{}", e );
-						return Err( io::Error::from( io::ErrorKind::NotConnected ) );
-					}
-
-					// Trying to work with an already closed connection.
-					//
-					tungstenite::Error::AlreadyClosed =>
-					{
-						error!( "{}", e );
-						return Err( io::Error::from( io::ErrorKind::ConnectionAborted ) );
-					}
-
-					_ =>
-					{
-						error!( "{}", e );
-						return Err( io::Error::from( io::ErrorKind::Other ) )
-					}
-				}
+				error!( "{}", e );
+				Poll::Ready( Err(Self::to_io_error(e)) )
 			}
+
+			_ => Ok(()).into(),
 		}
 	}
 
 
 
-	// -------AsyncWrite01 impl
-	//
-	fn async_shutdown( &mut self ) -> AsyncTokioResult
+	fn to_io_error( err: WsErr ) -> io::Error
 	{
-		trace!( "Closing AsyncWrite" );
-
-		// This can not throw normally, because the only errors the api
-		// can return is if we use a code or a reason string, which we don't.
-		//
-		match self.sink.close()
+		match err.kind()
 		{
-			Err(e) =>
+			// This would be a tungstenite error, but since we can't access it through warp...
+			//
+			WsErrKind::WarpErr => return io::Error::from( io::ErrorKind::Other ),
+
+
+			WsErrKind::TungErr =>
 			{
-				error!( "{}", e );
+				if let Some( e ) = err.source() { match e.downcast_ref::<TungErr>()
+				{
+					// The connection is closed normally, probably by the remote.
+					//
+					Some( TungErr::ConnectionClosed ) => return io::Error::from( io::ErrorKind::NotConnected      ) ,
+					Some( TungErr::AlreadyClosed    ) => return io::Error::from( io::ErrorKind::ConnectionAborted ) ,
+					Some( TungErr::Io(er)           ) => return io::Error::from( er.kind()                        ) ,
+					_                                 => return io::Error::from( io::ErrorKind::Other             ) ,
+				}}
+
+				else { return io::Error::from( io::ErrorKind::Other ); }
 			}
 
-			_ => {}
-		}
+			WsErrKind::Protocol => io::Error::from( io::ErrorKind::ConnectionReset ),
 
-		Ok(().into())
+			_ => unreachable!(),
+		}
 	}
 }
 
 
 
-impl<S: AsyncRead01 + AsyncWrite01> Drop for WsStream<S>
+impl<Inner: MsgStream> Drop for WsStream<Inner>
 {
 	fn drop( &mut self )
 	{
 		trace!( "Drop WsStream" );
-
-		let _ = self.async_shutdown();
 	}
 }
 
 
 
 
-
-
-impl<S: AsyncRead01 + AsyncWrite01> io::Read  for WsStream<S>
+impl<Inner: MsgStream> AsyncRead  for WsStream<Inner>
 {
-	fn read( &mut self, buf: &mut [u8] ) -> Result< usize, io::Error >
+	fn poll_read( mut self: Pin<&mut Self>, cx: &mut Context, buf: &mut [u8] ) -> Poll< io::Result<usize> >
 	{
-		self.io_read( buf )
-	}
-}
-
-impl<S: AsyncRead01 + AsyncWrite01> io::Read  for Pin< &mut WsStream<S> >
-{
-	fn read( &mut self, buf: &mut [u8] ) -> Result< usize, io::Error >
-	{
-		self.io_read( buf )
-	}
-}
-
-
-impl<S: AsyncRead01 + AsyncWrite01> io::Write for WsStream<S>
-{
-	fn write( &mut self, buf: &[u8] ) -> io::Result< usize > { self.io_write( buf ) }
-	fn flush( &mut self             ) -> io::Result< ()    > { self.io_flush(     ) }
-}
-
-
-impl<S: AsyncRead01 + AsyncWrite01> io::Write for Pin< &mut WsStream<S> >
-{
-	fn write( &mut self, buf: &[u8] ) -> io::Result< usize > { self.io_write( buf ) }
-	fn flush( &mut self             ) -> io::Result< ()    > { self.io_flush(     ) }
-}
-
-
-impl<S: AsyncRead01 + AsyncWrite01> AsyncRead01  for WsStream<S>             {}
-impl<S: AsyncRead01 + AsyncWrite01> AsyncRead01  for Pin< &mut WsStream<S> > {}
-
-
-impl<S: AsyncRead01 + AsyncWrite01> AsyncWrite01 for WsStream<S>
-{
-	fn shutdown( &mut self ) -> AsyncTokioResult
-	{
-		self.async_shutdown()
-	}
-}
-
-
-impl<S: AsyncRead01 + AsyncWrite01> AsyncWrite01 for Pin< &mut WsStream<S> >
-{
-	fn shutdown( &mut self ) -> AsyncTokioResult
-	{
-		self.async_shutdown()
+		self.poll_read_impl( cx, buf )
 	}
 }
 
 
 
-impl<S: AsyncRead01 + AsyncWrite01> AsyncRead  for WsStream<S>
-{
-	fn poll_read( self: Pin<&mut Self>, cx: &mut Context, buf: &mut [u8] ) -> Poll<Result<usize, io::Error>>
-	{
-		Pin::new( &mut AsyncRead01CompatExt::compat( self ) ).poll_read( cx, buf )
-	}
-}
-
-
-
-impl<S: AsyncRead01 + AsyncWrite01> AsyncWrite for WsStream<S>
+impl<Inner: MsgStream> AsyncWrite for WsStream<Inner>
 {
 	// TODO: on WouldBlock, we should wake up the task when it becomes ready.
 	//
-	fn poll_write( self: Pin<&mut Self>, cx: &mut Context, buf: &[u8] ) -> Poll<Result<usize, io::Error>>
+	fn poll_write( mut self: Pin<&mut Self>, cx: &mut Context, buf: &[u8] ) -> Poll< io::Result<usize> >
 	{
-		Pin::new( &mut AsyncWrite01CompatExt::compat( self ) ).poll_write( cx, buf )
+		trace!( "WsStream: AsyncWrite - poll_write" );
+		self.poll_write_impl( cx, buf )
 	}
 
 
-
-	fn poll_flush(mut self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Result<(), io::Error>>
+	fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll< io::Result<()> >
 	{
-		match self.io_flush()
-		{
-			Ok (())  => { Poll::Ready( Ok(()) ) }
-
-			Err( e ) =>
-			{
-				match e.kind()
-				{
-					io::ErrorKind::WouldBlock => Poll::Pending,
-					_                         => { error!( "{}", &e ); Poll::Ready( Err(e) ) }
-				}
-			}
-		}
+		trace!( "WsStream: AsyncWrite - poll_flush" );
+		self.poll_flush_impl(cx)
 	}
 
 
-	fn poll_close( mut self: Pin<&mut Self>, _cx: &mut Context ) -> Poll<Result<(), io::Error>>
+	fn poll_close( mut self: Pin<&mut Self>, cx: &mut Context ) -> Poll< io::Result<()> >
 	{
-		// This is infallible normally
-		//
-		self.async_shutdown().expect( "shutdown sink for wsstream" );
-		Poll::Ready( Ok(()) )
+		self.poll_close_impl( cx )
 	}
 }

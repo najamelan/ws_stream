@@ -1,6 +1,6 @@
 use
 {
-	crate :: { import::*, WsStream, WsErr, WsErrKind } ,
+	crate :: { import::*, TungWebSocket, WsErr, WsErrKind } ,
 };
 
 
@@ -8,7 +8,13 @@ use
 //
 pub struct Accept
 {
-	inner: AndThen< FutureResult<TcpStream, tungstenite::error::Error>, AcceptAsync<TcpStream, NoCallback>, fn(TcpStream) -> AcceptAsync<TcpStream, NoCallback> >,
+	inner: AndThen
+	<
+		FutureResult< TcpStream, tungstenite::error::Error > ,
+		AcceptAsync<TcpStream, NoCallback>                   ,
+		fn(TcpStream) -> AcceptAsync<TcpStream, NoCallback>  ,
+	>,
+
 	peer: Option<SocketAddr>,
 }
 
@@ -29,18 +35,20 @@ impl Accept
 
 
 
+// I think we tried making this a std future, but failed. I can't remember why.
+//
 impl Future01 for Accept
 {
-	type Item  = WsStream<TcpStream>;
+	type Item  = TungWebSocket<TcpStream>;
 	type Error = WsErr              ;
 
 	fn poll( &mut self ) -> Result< Async< Self::Item >, Self::Error >
 	{
 		match self.inner.poll()
 		{
-			Ok ( Async::Ready   ( ws ) ) => { trace!( "accept ok"      ); Ok ( Async::Ready( WsStream::new(ws, self.peer) ) ) },
-			Ok ( Async::NotReady       ) => { trace!( "accept pending" ); Ok ( Async::NotReady                              ) },
-			Err( e                     ) => { error!( "{}", &e         ); Err( WsErrKind::WsHandshake.into()                ) },
+			Ok ( Async::Ready   ( ws ) ) => { trace!( "accept ok"      ); Ok ( Async::Ready( TungWebSocket::new(ws, self.peer) ) ) },
+			Ok ( Async::NotReady       ) => { trace!( "accept pending" ); Ok ( Async::NotReady                                   ) },
+			Err( e                     ) => { error!( "{}", &e         ); Err( WsErrKind::WsHandshake.into()                     ) },
 		}
 	}
 }

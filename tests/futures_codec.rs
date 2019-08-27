@@ -21,26 +21,30 @@ use
 //
 fn frame03()
 {
-	// flexi_logger::Logger::with_str( "events=trace, wasm_websocket_stream=trace, tokio=warn" ).start().expect( "flexi_logger");
+	flexi_logger::Logger::with_str( "futures_codec=trace, ws_stream=trace, tokio=warn" ).start().expect( "flexi_logger");
 
 	rt::init( RtConfig::Local ).expect( "rt::init" );
 
 
 	let server = async
 	{
-		let mut connections = WsStream::listen( "127.0.0.1:3012" ).take(1);
-		let     server      = connections.next().await.expect( "1 connection" ).expect( "1 connection" ).await.expect( "WS handshake" );
+		let mut connections = TungWebSocket::listen( "127.0.0.1:3012" ).take(1);
+		let     socket      = connections.next().await.expect( "1 connection" ).expect( "1 connection" ).await.expect( "WS handshake" );
+
+		let server = WsStream::new( socket );
 
 		let mut framed = Framed::new( server, LinesCodec {} );
 
 		framed.send( "A line\n"       .to_string() ).await.expect( "Send a line" );
 		framed.send( "A second line\n".to_string() ).await.expect( "Send a line" );
+		framed.close().await.expect( "close frame" );
 	};
 
 
 	let client = async
 	{
-		let     client = WsStream::connect( "127.0.0.1:3012" ).await.expect( "connect to websocket" );
+		let     socket = TungWebSocket::connect( "127.0.0.1:3012" ).await.expect( "connect to websocket" );
+		let     client = WsStream::new( socket );
 		let mut framed = Framed::new( client, LinesCodec {} );
 
 
@@ -53,6 +57,7 @@ fn frame03()
 
 
 		let res = framed.next().await;
+		dbg!( &res );
 		assert!( res.is_none() );
 	};
 
@@ -77,8 +82,10 @@ fn partial()
 
 	let server = async move
 	{
-		let mut connections = WsStream::listen( "127.0.0.1:3013" ).take(1);
-		let     server      = connections.next().await.expect( "1 connection" ).expect( "1 connection" ).await.expect( "WS handshake" );
+		let mut connections = TungWebSocket::listen( "127.0.0.1:3013" ).take(1);
+		let     socket      = connections.next().await.expect( "1 connection" ).expect( "1 connection" ).await.expect( "WS handshake" );
+		let     server      = WsStream::new( socket );
+
 
 		let mut framed = Framed::new( server, LinesCodec {} );
 
@@ -94,7 +101,8 @@ fn partial()
 
 	let client = async move
 	{
-		let     client = WsStream::connect( "127.0.0.1:3013" ).await.expect( "connect to websocket" );
+		let     socket = TungWebSocket::connect( "127.0.0.1:3013" ).await.expect( "connect to websocket" );
+		let     client = WsStream::new( socket );
 		let mut framed = Framed::new( client, LinesCodec {} );
 
 		tx.send(()).expect( "trigger channel" );

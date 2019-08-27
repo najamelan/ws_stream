@@ -1,15 +1,12 @@
 //! This is an echo server that returns all incoming bytes, without framing. It is used for the tests in
 //! ws_stream_wasm.
 //
-#![ feature( async_await ) ]
-
-
 use
 {
 	ws_stream     :: { *                                                       } ,
 	async_runtime :: { rt, RtConfig                                            } ,
 	futures       :: { StreamExt, AsyncReadExt, AsyncBufReadExt, io::BufReader } ,
-	std           :: { io, env                                                 } ,
+	std           :: { env                                                     } ,
 	log           :: { *                                                       } ,
 };
 
@@ -17,7 +14,7 @@ use
 
 fn main()
 {
-	flexi_logger::Logger::with_str( "echo=trace, ws_stream=warn, tokio=warn" ).start().unwrap();
+	// flexi_logger::Logger::with_str( "echo=trace, ws_stream=trace, tokio=trace, tokio_tungstenite=trace, futures_util=trace, futures=trace, futures_io=trace" ).start().unwrap();
 
 	// We only need one thread.
 	//
@@ -30,7 +27,7 @@ fn main()
 		println!( "server task listening at: {}", &addr );
 
 
-		let mut connections = WsStream::listen( &addr );
+		let mut connections = TungWebSocket::listen( &addr );
 
 		while let Some( stream ) = connections.next().await
 		{
@@ -50,7 +47,7 @@ fn main()
 
 				// If the Ws handshake fails, we stop processing this connection
 				//
-				let ws_stream = match tcp_stream.await
+				let socket = match tcp_stream.await
 				{
 					Ok(ws) => ws,
 
@@ -62,28 +59,21 @@ fn main()
 				};
 
 
-				info!( "Incoming connection from: {}", ws_stream.peer_addr().expect( "peer addr" ) );
+				info!( "Incoming connection from: {}", socket.peer_addr().expect( "peer addr" ) );
 
-
+				let ws_stream = WsStream::new( socket );
 				let (reader, mut writer) = ws_stream.split();
 
 				// BufReader allows our AsyncRead to work with a bigger buffer than the default 8k.
 				// This improves performance quite a bit.
 				//
-				match BufReader::with_capacity( 512_000, reader ).copy_buf_into( &mut writer ).await
+				match BufReader::with_capacity( 64_000, reader ).copy_buf_into( &mut writer ).await
 				{
 					Ok (_) => {},
 
-					Err(e) => match e.kind()
+					Err(e) =>
 					{
-						// This can happen in the flush, but it's becaue the client has already disconnected
-						//
-						io::ErrorKind::NotConnected      => {}
-						io::ErrorKind::ConnectionAborted => {}
-
-						// If another error happens, we want to know about it
-						//
-						_ => { panic!( e ) }
+						error!( "{}", e );
 					}
 				}
 			};

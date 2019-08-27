@@ -1,18 +1,15 @@
-use
-{
-	crate     :: { import::*, WsErr, WsErrKind, Accept } ,
-};
+use crate::{ import::*, WsErr, WsErrKind, Accept };
 
 
 /// A stream of incoming connections.
 //
-pub struct Connections
+pub struct Incoming
 {
-	incoming: Compat01As03<Incoming>,
+	incoming: Compat01As03<TokioIncoming>,
 }
 
 
-impl Connections
+impl Incoming
 {
 	// See pin-utils documentation for safety:
 	// To make using this macro safe, three things need to be ensured:
@@ -22,19 +19,19 @@ impl Connections
    //   The struct can only implement Unpin if the field's type is Unpin.
    // - The struct must not be #[repr(packed)].
    //
-	pin_utils::unsafe_pinned!( incoming: Compat01As03<Incoming> );
+	pin_utils::unsafe_pinned!( incoming: Compat01As03<TokioIncoming> );
 
 
-	/// A new Connections stream
+	/// A new Incoming stream
 	//
-	pub fn new( incoming: Compat01As03<Incoming> ) -> Self
+	pub fn new( incoming: Compat01As03<TokioIncoming> ) -> Self
 	{
 		Self{ incoming }
 	}
 }
 
 
-impl Stream for Connections
+impl Stream for Incoming
 {
 	type Item = Result< Compat01As03<Accept>, WsErr >;
 

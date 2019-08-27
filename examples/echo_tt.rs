@@ -1,9 +1,6 @@
 //! An echo server using just tokio tungstenite. This allows comparing the
 //! performance with ws_stream.
 //
-#![ feature( async_await ) ]
-
-
 use
 {
 	async_runtime     :: { rt                                                                           } ,
