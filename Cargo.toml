@@ -51,10 +51,6 @@ readme = "README.md"
 repository = "https://github.com/najamelan/ws_stream"
 version = "0.1.0"
 
-[patch]
-[patch.crates-io]
-[patch.crates-io.futures-preview]
-path = "../futures-rs/futures"
 
 [profile]
 [profile.release]

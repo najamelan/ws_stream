@@ -42,12 +42,8 @@ dev-dependencies:
 
 
 profile:
+
   release:
-    debug: true
 
-
-patch:
-
-  crates-io:
-
-    futures-preview : { path: ../futures-rs/futures }
+    codegen-units: 1
+    debug        : true
