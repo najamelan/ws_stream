@@ -25,14 +25,12 @@ version = "^0.1"
 
 [dev-dependencies]
 flexi_logger = "^0.11"
+futures_codec = "^0.2"
 pretty_assertions = "^0.6"
 
 [dev-dependencies.async_runtime]
 package = "naja_async_runtime"
 version = "^0.3"
-
-[dev-dependencies.futures_codec]
-path = "../futures-codec"
 
 [features]
 default = ["warp"]
@@ -51,7 +49,12 @@ readme = "README.md"
 repository = "https://github.com/najamelan/ws_stream"
 version = "0.1.0"
 
+[patch]
+[patch.crates-io]
+[patch.crates-io.futures_codec]
+git = "https://github.com/matthunz/futures-codec.git"
 
 [profile]
 [profile.release]
+codegen-units = 1
 debug = true

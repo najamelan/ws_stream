@@ -36,7 +36,7 @@ dependencies:
 dev-dependencies:
 
   pretty_assertions: ^0.6
-  futures_codec    : { path: ../futures-codec }
+  futures_codec    : ^0.2
   async_runtime    : { version: ^0.3, package: naja_async_runtime }
   flexi_logger     : ^0.11
 
@@ -47,3 +47,10 @@ profile:
 
     codegen-units: 1
     debug        : true
+
+
+patch:
+
+  crates-io:
+
+    futures_codec : { git: "https://github.com/matthunz/futures-codec.git" }
