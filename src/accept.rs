@@ -40,7 +40,7 @@ impl Accept
 impl Future01 for Accept
 {
 	type Item  = TungWebSocket<TcpStream>;
-	type Error = WsErr              ;
+	type Error = WsErr                   ;
 
 	fn poll( &mut self ) -> Result< Async< Self::Item >, Self::Error >
 	{

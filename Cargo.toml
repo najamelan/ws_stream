@@ -28,10 +28,6 @@ flexi_logger = "^0.14"
 futures_codec = "^0.2"
 pretty_assertions = "^0.6"
 
-[dev-dependencies.async_runtime]
-package = "naja_async_runtime"
-version = "^0.3"
-
 [dev-dependencies.tokio-executor]
 version = "^0.1"
 

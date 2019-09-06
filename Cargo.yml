@@ -37,7 +37,6 @@ dev-dependencies:
 
   pretty_assertions: ^0.6
   futures_codec    : ^0.2
-  async_runtime    : { version: ^0.3, package: naja_async_runtime }
   flexi_logger     : ^0.14
   tokio-executor   : { version: ^0.1 }
 

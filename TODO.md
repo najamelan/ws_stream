@@ -8,7 +8,10 @@
 - the connection closed error from tungstenite
 
 ## Testing
-- more tests
+- all current functionality
+- how to close the connection properly
+- error handling
+- spurious wakeups in poll_write
 - enable travis CI
 - enable dependabot
 

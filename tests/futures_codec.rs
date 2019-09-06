@@ -1,5 +1,3 @@
-#![ feature( async_await ) ]
-
 // Test using the AsyncRead/AsyncWrite from futures 0.3
 //
 // ✔ frame with futures-codec
@@ -9,10 +7,9 @@
 
 use
 {
-	ws_stream     :: { *                                    } ,
-	async_runtime :: { rt, RtConfig                         } ,
-	futures       :: { StreamExt, SinkExt, channel::oneshot } ,
-	futures_codec :: { LinesCodec, Framed                   } ,
+	ws_stream     :: { *                                                                              } ,
+	futures       :: { StreamExt, SinkExt, channel::oneshot, executor::LocalPool, task::LocalSpawnExt } ,
+	futures_codec :: { LinesCodec, Framed                                                             } ,
 	// log           :: { * } ,
 };
 
@@ -21,9 +18,10 @@ use
 //
 fn frame03()
 {
-	flexi_logger::Logger::with_str( "futures_codec=trace, ws_stream=trace, tokio=warn" ).start().expect( "flexi_logger");
+	// flexi_logger::Logger::with_str( "futures_codec=trace, ws_stream=trace, tokio=warn" ).start().expect( "flexi_logger");
 
-	rt::init( RtConfig::Local ).expect( "rt::init" );
+	let mut pool     = LocalPool::new();
+	let mut spawner  = pool.spawner();
 
 
 	let server = async
@@ -61,10 +59,10 @@ fn frame03()
 		assert!( res.is_none() );
 	};
 
-	rt::spawn( server ).expect( "spawn task" );
-	rt::spawn( client ).expect( "spawn task" );
+	spawner.spawn_local( server ).expect( "spawn server" );
+	spawner.spawn_local( client ).expect( "spawn client" );
 
-	rt::run();
+	pool.run();
 }
 
 
@@ -76,7 +74,8 @@ fn partial()
 {
 	// flexi_logger::Logger::with_str( "events=trace, wasm_websocket_stream=trace, tokio=warn" ).start().expect( "flexi_logger");
 
-	rt::init( RtConfig::Local ).expect( "rt::init" );
+	let mut pool     = LocalPool::new();
+	let mut spawner  = pool.spawner();
 
 	let (tx, rx) = oneshot::channel();
 
@@ -89,7 +88,7 @@ fn partial()
 
 		let mut framed = Framed::new( server, LinesCodec {} );
 
-		framed.send( "A "             .to_string() ).await.expect( "Send a line" );
+		framed.send( "A ".to_string() ).await.expect( "Send a line" );
 
 		// Make sure the client tries to read on a partial line first.
 		//
@@ -97,6 +96,8 @@ fn partial()
 
 		framed.send( "line\n"         .to_string() ).await.expect( "Send a line" );
 		framed.send( "A second line\n".to_string() ).await.expect( "Send a line" );
+
+		framed.close().await.expect( "close connection" );
 	};
 
 	let client = async move
@@ -105,21 +106,24 @@ fn partial()
 		let     client = WsStream::new( socket );
 		let mut framed = Framed::new( client, LinesCodec {} );
 
+		// This will not return pending, so we will call framed.next() before the server task will send
+		// the rest of the line.
+		//
 		tx.send(()).expect( "trigger channel" );
 		let res = framed.next().await.expect( "Receive some" ).expect( "Receive a line" );
-		assert_eq!( "A line\n".to_string(), res );
+		assert_eq!( "A line\n".to_string(), dbg!( res ) );
 
 
 		let res = framed.next().await.expect( "Receive some" ).expect( "Receive a second line" );
-		assert_eq!( "A second line\n".to_string(), res );
+		assert_eq!( "A second line\n".to_string(), dbg!( res ) );
 
 
 		let res = framed.next().await;
-		assert!( res.is_none() );
+		assert!( dbg!( res ).is_none() );
 	};
 
-	rt::spawn( server ).expect( "spawn task" );
-	rt::spawn( client ).expect( "spawn task" );
+	spawner.spawn_local( server ).expect( "spawn server" );
+	spawner.spawn_local( client ).expect( "spawn client" );
 
-	rt::run();
+	pool.run();
 }
