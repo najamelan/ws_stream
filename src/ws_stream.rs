@@ -233,6 +233,8 @@ impl<Inner: MsgStream> WsStream<Inner>
 
 	fn to_io_error( err: WsErr ) -> io::Error
 	{
+		error!( "{:?}", &err );
+
 		match err.kind()
 		{
 			// This would be a tungstenite error, but since we can't access it through warp...
