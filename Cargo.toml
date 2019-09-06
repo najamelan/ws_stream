@@ -1,7 +1,7 @@
 # Auto-generated from "Cargo.yml"
 [dependencies]
 log = "^0.4"
-pin-utils = "^0.1.0-alpha.4"
+pin-utils = "^0.1.0-alpha"
 tokio-tungstenite = "^0.9"
 tungstenite = "^0.9"
 url = "^2"
@@ -24,13 +24,16 @@ optional = true
 version = "^0.1"
 
 [dev-dependencies]
-flexi_logger = "^0.11"
+flexi_logger = "^0.14"
 futures_codec = "^0.2"
 pretty_assertions = "^0.6"
 
 [dev-dependencies.async_runtime]
 package = "naja_async_runtime"
 version = "^0.3"
+
+[dev-dependencies.tokio-executor]
+version = "^0.1"
 
 [features]
 default = ["warp"]

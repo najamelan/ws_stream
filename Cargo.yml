@@ -30,7 +30,7 @@ dependencies:
   tungstenite       : ^0.9
   tokio-tungstenite : ^0.9
   url               : ^2
-  pin-utils         : ^0.1.0-alpha.4
+  pin-utils         : ^0.1.0-alpha
   warp              : { version: ^0.1, optional: true }
 
 dev-dependencies:
@@ -38,7 +38,8 @@ dev-dependencies:
   pretty_assertions: ^0.6
   futures_codec    : ^0.2
   async_runtime    : { version: ^0.3, package: naja_async_runtime }
-  flexi_logger     : ^0.11
+  flexi_logger     : ^0.14
+  tokio-executor   : { version: ^0.1 }
 
 
 profile:
