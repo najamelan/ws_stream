@@ -8,7 +8,6 @@
 
 
 mod accept     ;
-// mod connection ;
 mod error      ;
 mod incoming   ;
 mod message    ;
@@ -18,7 +17,6 @@ mod providers  ;
 pub use
 {
 	accept          :: * ,
-	// connection      :: * ,
 	error           :: * ,
 	incoming        :: * ,
 	message         :: * ,

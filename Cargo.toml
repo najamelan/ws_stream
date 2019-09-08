@@ -2,7 +2,6 @@
 [dependencies]
 log = "^0.4"
 pin-utils = "^0.1.0-alpha"
-tokio-tungstenite = "^0.9"
 tungstenite = "^0.9"
 url = "^2"
 
@@ -19,6 +18,10 @@ default-features = false
 features = ["codec", "tcp"]
 version = "^0.1"
 
+[dependencies.tokio-tungstenite]
+optional = true
+version = "^0.9"
+
 [dependencies.warp]
 optional = true
 version = "^0.1"
@@ -31,8 +34,16 @@ pretty_assertions = "^0.6"
 [dev-dependencies.tokio-executor]
 version = "^0.1"
 
+[dev-dependencies.tokio-tungstenite]
+features = ["tls"]
+version = "^0.9"
+
+[dev-dependencies.warp]
+features = ["tls"]
+version = "^0.1"
+
 [features]
-default = ["warp"]
+default = ["warp", "tokio-tungstenite"]
 
 [package]
 authors = ["Naja Melan <najamelan@autistici.org>"]
