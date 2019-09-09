@@ -1,7 +1,9 @@
-use crate::{ import::*, WsErr, WsErrKind, Accept };
+use crate::{ import::*, WsErr, WsErrKind, Handshake };
 
 
-/// A stream of incoming connections.
+/// A stream of incoming connections. Will yield [Handshake].
+/// Can return WsErrKind::TcpConnection if the tcp connection fails. This error type contains
+/// an inner source error for more information.
 //
 pub struct Incoming
 {
@@ -33,7 +35,7 @@ impl Incoming
 
 impl Stream for Incoming
 {
-	type Item = Result< Compat01As03<Accept>, WsErr >;
+	type Item = Result< Compat01As03<Handshake>, WsErr >;
 
 
 	fn poll_next( self: Pin<&mut Self>, cx: &mut Context ) -> Poll< Option<Self::Item> >
@@ -48,12 +50,16 @@ impl Stream for Incoming
 				{
 					Some( Ok(conn) ) =>
 					{
-						Poll::Ready(Some(Ok( Accept::new(conn).compat() )))
+						Poll::Ready(Some(Ok( Handshake::new(conn).compat() )))
 					}
 
-					Some( Err(_) ) => Poll::Ready(Some(Err( WsErrKind::TcpConnection.into() ))),
+					Some( Err(e) ) => Poll::Ready(Some(Err( WsErr
+					{
+						kind : WsErrKind::TcpConnection ,
+						inner: Some( Box::new( e ) )    ,
+					}))),
 
-					None           => Poll::Ready( None ),
+					None => Poll::Ready( None ),
 				}
 			}
 		}

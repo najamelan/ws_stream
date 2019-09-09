@@ -172,6 +172,9 @@ impl From<Message> for TungMessage
 				match kind
 				{
 					MessageKind::Text   => TungMessage::Text  ( inner.to_str().expect( "get str from warp message").to_owned() ),
+
+					// TODO: remove copy when warp releases
+					//
 					MessageKind::Binary => TungMessage::Binary( inner.as_bytes().to_owned() ),
 
 					// Close frame swallowed by warp

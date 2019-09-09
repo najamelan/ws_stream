@@ -18,7 +18,13 @@ features:
 
   # just for development, enable it by default
   #
-  default: [warp, tokio-tungstenite]
+  default: [warp, tokio_tungstenite, tls]
+
+  tokio_tungstenite: [tokio-tungstenite, url]
+
+  # TODO: verify that this does not turn the dependencies on by itself.
+  #
+  tls: [tokio-tungstenite/tls, warp/tls]
 
 
 dependencies:
@@ -28,9 +34,9 @@ dependencies:
   log               : ^0.4
   tokio             : { version: ^0.1, default-features: false, features: [codec, tcp] }
   tungstenite       : ^0.9
-  url               : ^2
   pin-utils         : ^0.1.0-alpha
   tokio-tungstenite : { version: ^0.9, optional: true }
+  url               : { version: ^2  , optional: true }
   warp              : { version: ^0.1, optional: true }
 
 dev-dependencies:

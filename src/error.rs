@@ -25,7 +25,9 @@ pub enum WsErrKind
 	//
 	WsHandshake,
 
-	/// An error happend on the tcp level when connecting.
+	/// An error happend on the tcp level when connecting. This will contain an inner
+	/// error that you can obtain with `error.source()` for more information. The underlying
+	/// error will be formatted in the display impl.
 	//
 	TcpConnection,
 
@@ -33,11 +35,11 @@ pub enum WsErrKind
 	//
 	TungErr,
 
-	/// A tungstenite error.
+	/// A warp error.
 	//
 	WarpErr,
 
-	/// A tungstenite error.
+	/// A websocket protocol error.
 	//
 	Protocol,
 

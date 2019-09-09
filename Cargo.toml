@@ -3,7 +3,6 @@
 log = "^0.4"
 pin-utils = "^0.1.0-alpha"
 tungstenite = "^0.9"
-url = "^2"
 
 [dependencies.futures-preview]
 features = ["io-compat", "compat"]
@@ -21,6 +20,10 @@ version = "^0.1"
 [dependencies.tokio-tungstenite]
 optional = true
 version = "^0.9"
+
+[dependencies.url]
+optional = true
+version = "^2"
 
 [dependencies.warp]
 optional = true
@@ -43,7 +46,9 @@ features = ["tls"]
 version = "^0.1"
 
 [features]
-default = ["warp", "tokio-tungstenite"]
+default = ["warp", "tokio_tungstenite", "tls"]
+tls = ["tokio-tungstenite/tls", "warp/tls"]
+tokio_tungstenite = ["tokio-tungstenite", "url"]
 
 [package]
 authors = ["Naja Melan <najamelan@autistici.org>"]

@@ -7,21 +7,19 @@
 
 
 
-mod accept     ;
+#[cfg( feature = "tokio-tungstenite" )] mod handshake  ;
+#[cfg( feature = "tokio-tungstenite" )] mod incoming   ;
+
 mod error      ;
-mod incoming   ;
 mod message    ;
 mod ws_stream  ;
 mod providers  ;
 
 pub use
 {
-	accept          :: * ,
 	error           :: * ,
-	incoming        :: * ,
 	message         :: * ,
 
-	providers       :: { TungWebSocket } ,
 	self::ws_stream :: * ,
 };
 
@@ -31,6 +29,16 @@ pub use
 pub use
 {
 	providers:: { WarpWebSocket } ,
+};
+
+
+#[cfg( feature = "tokio-tungstenite" )]
+//
+pub use
+{
+	handshake       :: * ,
+	incoming        :: * ,
+	providers:: { TungWebSocket } ,
 };
 
 
@@ -48,7 +56,7 @@ mod import
 		std               :: { cmp::{ self }, io::{ self, ErrorKind::WouldBlock }, pin::Pin, fmt, net::SocketAddr, error::Error as StdError, ops::Deref } ,
 		tokio             :: { net::{ tcp::Incoming as TokioIncoming, TcpListener, TcpStream }                                                  } ,
 		tokio             :: { io::{ AsyncRead as AsyncRead01, AsyncWrite as AsyncWrite01 }, prelude::{ Async }                } ,
-		tokio_tungstenite :: { accept_async, client_async, WebSocketStream as TTungSocket, AcceptAsync                           } ,
+		tokio_tungstenite :: { accept_async, client_async, client_async_tls, MaybeTlsStream, WebSocketStream as TTungSocket, AcceptAsync                           } ,
 		tungstenite       :: { handshake::{ server::NoCallback }, Message as TungMessage, Error as TungErr, protocol::CloseFrame } ,
 		url               :: { Url                                                                                               } ,
 	};

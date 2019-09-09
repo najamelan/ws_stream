@@ -37,9 +37,10 @@ impl<S: AsyncRead01 + AsyncWrite01> TungWebSocket<S>
 
 impl TungWebSocket<TcpStream>
 {
-	/// Listen over tcp. This will return a stream of WsStream, one for each incoming connection.
+	/// Listen over tcp. This will return a stream of [Accept], one for each incoming connection. Accept will
+	/// resolve once the websocket handshake is complete. The echo example shows how to use this.
 	//
-	pub fn listen< T: AsRef<str> >( url: T )  -> Incoming
+	pub fn listen< T: AsRef<str> >( url: T ) -> Incoming
 	{
 		let addr = url.as_ref().parse().unwrap();
 
@@ -73,6 +74,62 @@ impl TungWebSocket<TcpStream>
 				// See: https://github.com/snapview/tokio-tungstenite/issues/55
 				//
 				match ok(()).and_then( |_| { client_async( Url::parse( &url ).expect( "parse url" ), tcpstream ) } ).compat().await
+				{
+					Ok (ws) => Ok( Self::new( ws.0, Some( addr ) ) ),
+					Err(e ) =>
+					{
+						error!( "{}", &e );
+						Err( WsErrKind::WsHandshake.into() )
+					},
+				}
+			}
+
+			Err(e) => Err( WsErr { kind: WsErrKind::TcpConnection, inner: Some( Box::new( e ) ) } ),
+		}
+	}
+}
+
+
+
+
+impl TungWebSocket<MaybeTlsStream<TcpStream>>
+{
+	// /// Listen over tcp. This will return a stream of WsStream, one for each incoming connection.
+	// //
+	// pub fn listen< T: AsRef<str> >( url: T )  -> Incoming
+	// {
+	// 	let addr = url.as_ref().parse().unwrap();
+
+	// 	// Create the event loop and TCP listener we'll accept connections on.
+	// 	//
+	// 	let socket = TcpListener::bind( &addr ).unwrap();
+	// 	info!( "Listening on: {}", addr );
+
+	// 	Incoming::new( socket.incoming().compat() )
+	// }
+
+
+	/// Connect to a websocket over tcp.
+	//
+	pub async fn connect_ssl< T: AsRef<str> >( url: T, domain: &str ) -> Result< Self, WsErr >
+	{
+		let addr = url.as_ref().parse().expect( "parse socketaddress" );
+
+		// Create the event loop and TCP listener we'll accept connections on.
+		//
+		let socket = TcpStream::connect( &addr ).compat().await;
+		info!( "WsStream: connecting to: {}", addr );
+
+		let url = "wss://".to_string() + domain;
+
+		match socket
+		{
+			Ok(tcpstream) =>
+			{
+				// We need the ok and then because client_async does io outside of the future it returns.
+				// See: https://github.com/snapview/tokio-tungstenite/issues/55
+				//
+				match ok(()).and_then( |_| { client_async_tls( Url::parse( &url ).expect( "parse url" ), tcpstream ) } ).compat().await
 				{
 					Ok (ws) => Ok( Self::new( ws.0, Some( addr ) ) ),
 					Err(e ) =>
@@ -149,6 +206,7 @@ impl<S: AsyncRead01 + AsyncWrite01> Sink<Message> for TungWebSocket<S>
 
 	fn poll_close( mut self: Pin<&mut Self>, cx: &mut Context ) -> Poll<Result<(), Self::Error>>
 	{
+		trace!( "TungWebSocket: poll_close" );
 		Pin::new( &mut self.sink ).poll_close( cx ).map_err( |e| e.into() )
 	}
 }

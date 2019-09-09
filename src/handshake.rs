@@ -4,9 +4,11 @@ use
 };
 
 
-/// Future representing a finished WS handshake.
+/// Future resolving to a finished WS handshake.
+/// This will resolve to a TungWebSocket<TcpStream> or a WsErrKind::WsHandshake error. This error
+/// holds the underlying error from tungstenite which can be obtained with the `source` method.
 //
-pub struct Accept
+pub struct Handshake
 {
 	inner: AndThen
 	<
@@ -19,7 +21,7 @@ pub struct Accept
 }
 
 
-impl Accept
+impl Handshake
 {
 	/// Create a new accept handshake from an AsyncRead01/Write01
 	//
@@ -35,9 +37,9 @@ impl Accept
 
 
 
-// I think we tried making this a std future, but failed. I can't remember why.
+// I think I tried making this a std future, but failed. I can't remember why.
 //
-impl Future01 for Accept
+impl Future01 for Handshake
 {
 	type Item  = TungWebSocket<TcpStream>;
 	type Error = WsErr                   ;
@@ -46,9 +48,18 @@ impl Future01 for Accept
 	{
 		match self.inner.poll()
 		{
-			Ok ( Async::Ready   ( ws ) ) => { trace!( "accept ok"      ); Ok ( Async::Ready( TungWebSocket::new(ws, self.peer) ) ) },
-			Ok ( Async::NotReady       ) => { trace!( "accept pending" ); Ok ( Async::NotReady                                   ) },
-			Err( e                     ) => { error!( "{}", &e         ); Err( WsErrKind::WsHandshake.into()                     ) },
+			Ok ( Async::Ready   ( ws ) ) => { Ok ( Async::Ready( TungWebSocket::new(ws, self.peer) ) ) },
+			Ok ( Async::NotReady       ) => { Ok ( Async::NotReady                                   ) },
+
+
+			Err( e ) =>
+			{
+				Err( WsErr
+				{
+					kind : WsErrKind::WsHandshake ,
+					inner: Some( Box::new( e ) )  ,
+				})
+			},
 		}
 	}
 }

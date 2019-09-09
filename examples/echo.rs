@@ -42,7 +42,7 @@ fn main()
 }
 
 
-async fn handle_conn( stream: Result< Compat01As03<Accept>, WsErr> )
+async fn handle_conn( stream: Result< Compat01As03<Handshake>, WsErr> )
 {
 
 	// If the TCP stream fails, we stop processing this connection
