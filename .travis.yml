@@ -34,13 +34,9 @@ matrix:
 
     - os: linux
 
-      install:
-
-        - sudo apt install ca-certificates
-        - sudo cp tests/certs/ws.stream.crt /usr/local/share/ca-certificates/
-        - sudo update-ca-certificates
-
       script:
+        - sudo cp tests/cert/ws.stream.crt /usr/local/share/ca-certificates/
+        - sudo update-ca-certificates
         - cargo test --all-features
         - cargo test --all-features --release
         - cargo doc --no-deps --all-features
