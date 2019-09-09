@@ -1,7 +1,17 @@
 package:
 
+  # When releasing to crates.io:
+  #
+  # - Update CHANGELOG.md.
+  # - Update version numbers in Cargo.yml, Cargo.toml, install section of readme.
+  # - verify CI result
+  # - test dependent crates
+  # - cargo publish
+  # - merge dev branch into master
+  # - create git tag
+  #
+  version       : 0.1.0
   name          : ws_stream
-  version       : 0.1.0 # remember to update html_root_url in lib.rs
   edition       : '2018'
   authors       : [ Naja Melan <najamelan@autistici.org> ]
   description   : Provide AsyncRead/AsyncWrite over WebSockets (both tokio and 0.3)
@@ -10,8 +20,12 @@ package:
   repository    : https://github.com/najamelan/ws_stream
   documentation : https://docs.rs/ws_stream
   readme        : README.md
-  keywords      : [ websocket, tokio, stream, async ]
+  keywords      : [ websocket, tokio, stream, async, futures ]
   categories    : []
+
+  metadata:
+    docs.rs:
+      all-features: true
 
 
 features:
@@ -25,6 +39,10 @@ features:
   # TODO: verify that this does not turn the dependencies on by itself.
   #
   tls: [tokio-tungstenite/tls, warp/tls]
+
+  # only used internally, don't use
+  #
+  external_doc: []
 
 
 dependencies:
