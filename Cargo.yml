@@ -2,6 +2,8 @@ package:
 
   # When releasing to crates.io:
   #
+  # - TODO/FIXME's in code checked?
+  # - review logging/tracing?
   # - Update CHANGELOG.md.
   # - Update version numbers in Cargo.yml, Cargo.toml, install section of readme.
   # - verify CI result
@@ -10,7 +12,7 @@ package:
   # - merge dev branch into master
   # - create git tag
   #
-  version       : 0.1.0
+  version       : 0.0.1
   name          : ws_stream
   edition       : '2018'
   authors       : [ Naja Melan <najamelan@autistici.org> ]
@@ -24,21 +26,12 @@ package:
   categories    : []
 
   metadata:
-    docs.rs:
-      all-features: true
+    docs:
+      rs:
+        all-features: true
 
 
 features:
-
-  # just for development, enable it by default
-  #
-  default: [warp, tokio_tungstenite, tls]
-
-  tokio_tungstenite: [tokio-tungstenite, url]
-
-  # TODO: verify that this does not turn the dependencies on by itself.
-  #
-  tls: [tokio-tungstenite/tls, warp/tls]
 
   # only used internally, don't use
   #
@@ -47,36 +40,3 @@ features:
 
 dependencies:
 
-  futures-preview   : { version: ^0.3.0-alpha, features: [io-compat, compat] }
-  futures_01        : { version: ^0.1, package: futures }
-  log               : ^0.4
-  tokio             : { version: ^0.1, default-features: false, features: [codec, tcp] }
-  tungstenite       : ^0.9
-  pin-utils         : ^0.1.0-alpha
-  tokio-tungstenite : { version: ^0.9, optional: true }
-  url               : { version: ^2  , optional: true }
-  warp              : { version: ^0.1, optional: true }
-
-dev-dependencies:
-
-  pretty_assertions: ^0.6
-  futures_codec    : ^0.2
-  flexi_logger     : ^0.14
-  tokio-executor   : { version: ^0.1 }
-  warp             : { version: ^0.1, features: [tls] }
-  tokio-tungstenite: { version: ^0.9, features: [tls] }
-
-
-profile:
-
-  release:
-
-    codegen-units: 1
-    debug        : true
-
-
-patch:
-
-  crates-io:
-
-    futures_codec : { git: "https://github.com/matthunz/futures-codec.git" }
